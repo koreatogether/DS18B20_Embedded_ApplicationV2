@@ -15,6 +15,9 @@ logs/**
 # PlatformIO
 .pio/
 .vscode/
+.github/
+.github/*
+.github/** 
 build/
 libdeps/
 *.pyc
