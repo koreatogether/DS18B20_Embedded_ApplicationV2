@@ -15,10 +15,13 @@ logs/**
 # PlatformIO
 .pio/
 .vscode/
+# .github/workflows/main.yml만 추적 예외로 허용
 .github/
 .github/*
-.github/** 
-build/
+.github/**
+!.github/workflows/main.yml
+# build/ 폴더는 빌드 산출물 보존을 위해 무시하지 않음
+# build/
 libdeps/
 *.pyc
 __pycache__/

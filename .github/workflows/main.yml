@@ -23,19 +23,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install platformio
 
+
       - name: Build (uno_r4_wifi) with log
         run: |
-          mkdir -p text
-          pio run -e uno_r4_wifi -v 2>&1 | tee text/compile_results.txt
+          mkdir -p logs/comfile
+          pio run -e uno_r4_wifi -v 2>&1 | tee logs/comfile/compile_results.txt
 
       - name: Run native unit tests with log
         run: |
-          mkdir -p text
-          pio test -e native -v 2>&1 | tee text/test_results_clean.txt
+          mkdir -p test/logs
+          pio test -e native -v 2>&1 | tee test/logs/test_results_clean.txt
 
       - name: Show firmware size
         run: pio run -e uno_r4_wifi --target size
-
 
       - name: Upload build artifacts
         if: always()
@@ -46,6 +46,9 @@ jobs:
             .pio/build/uno_r4_wifi/*.elf
             .pio/build/uno_r4_wifi/*.bin
             .pio/build/uno_r4_wifi/*.hex
+            build/uno_r4_wifi/*.elf
+            build/uno_r4_wifi/*.bin
+            build/uno_r4_wifi/*.hex
 
       - name: Upload build/test logs
         if: always()
@@ -53,13 +56,15 @@ jobs:
         with:
           name: logs
           path: |
-            text/compile_results.txt
-            text/test_results_clean.txt
+            logs/comfile/compile_results.txt
+            test/logs/test_results_clean.txt
+
 
       - name: Run cppcheck (static analysis)
         run: |
           pip install cppcheck
           cppcheck --enable=all --inconclusive --std=c++17 --quiet --suppress=missingIncludeSystem src/
+
 
       - name: Run code quality metrics analysis
         run: |
