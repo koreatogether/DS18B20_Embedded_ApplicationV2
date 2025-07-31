@@ -48,13 +48,6 @@ Thumbs.db
 *.cmd
 
 
-#Ignore insiders AI rules
-.github\copilot-instructions.md
 
-# Ignore MCP and all JSON config files
-mcp.json
-*.json
-
-# Ignore MCP and all JSON config files
-mcp.json
-*.json
+# 저장소의 모든 파일 무시
+/*
