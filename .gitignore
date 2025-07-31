@@ -39,6 +39,7 @@ test/fixtures/**
 Thumbs.db
 
 # 기타
+*.json
 *.log
 *.exe
 *.sh
