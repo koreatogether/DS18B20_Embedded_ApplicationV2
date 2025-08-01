@@ -1,6 +1,5 @@
 #pragma once
 #include "../domain/TemperatureSensorManager.h"
-#include "../domain/ITemperatureSensor.h"
 
 class TemperatureService
 {
@@ -10,5 +9,5 @@ public:
     void printStatus();
 
 private:
-    TemperatureSensorManager *manager;
+    TemperatureSensorManager *_manager;
 };

@@ -1,36 +1,14 @@
 #include "DS18B20Sensor.h"
 
-DS18B20Sensor::DS18B20Sensor(uint8_t pin)
-    : pin(pin), oneWire(pin), sensors(&oneWire) {}
+DS18B20Sensor::DS18B20Sensor(uint8_t pin) : _pin(pin) {}
 
-bool DS18B20Sensor::begin()
+void DS18B20Sensor::begin()
 {
-    sensors.begin();
-    return true;
+    // 센서 초기화 코드
 }
 
-int DS18B20Sensor::getSensorCount()
+float DS18B20Sensor::readTemperature()
 {
-    return sensors.getDeviceCount();
-}
-
-bool DS18B20Sensor::getAddress(uint8_t index, uint64_t &address)
-{
-    DeviceAddress addr;
-    if (sensors.getAddress(addr, index))
-    {
-        address = 0;
-        for (int i = 0; i < 8; ++i)
-        {
-            address |= ((uint64_t)addr[i] << (8 * i));
-        }
-        return true;
-    }
-    return false;
-}
-
-float DS18B20Sensor::getTemperature(uint8_t index)
-{
-    sensors.requestTemperatures();
-    return sensors.getTempCByIndex(index);
+    // 온도 읽기 코드
+    return 0.0f;
 }
