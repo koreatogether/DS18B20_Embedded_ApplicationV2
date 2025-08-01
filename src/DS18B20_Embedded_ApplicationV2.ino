@@ -518,7 +518,7 @@ void handleSerialInput()
                             {
                                 setSensorLogicalId(selectedSensorIdx, newId);
                                 Serial.print("센서 ");
-                                Serial.print(selectedSensorIdx + 1);
+                                Serial.print(selectedDisplayIdx);
                                 Serial.print("의 ID를 ");
                                 Serial.print(newId);
                                 Serial.println("(으)로 변경 완료 (센서 EEPROM 저장)");
