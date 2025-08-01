@@ -15,12 +15,11 @@ public:
     bool beginCalled = false;
 
     MockTemperatureSensor(const std::vector<Entry> &data) : entries(data) {}
-    bool begin() override
+    void begin() override
     {
         beginCalled = true;
-        return true;
     }
-    int getSensorCount() override { return static_cast<int>(entries.size()); }
+    int getSensorCount() const override { return static_cast<int>(entries.size()); }
     bool getAddress(uint8_t index, uint64_t &address) override
     {
         if (index >= entries.size())
@@ -34,4 +33,6 @@ public:
             return 0.0f;
         return entries[index].temperature;
     }
+    // 필수 구현
+    float readTemperature() override { return entries.empty() ? 0.0f : entries[0].temperature; }
 };

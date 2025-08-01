@@ -59,6 +59,8 @@ Thumbs.db
 # docs, include, lib 폴더 및 하위 전체 무시
 docs/
 docs/*
+docs/test/
+docs/test/**
 docs/**
 include/
 include/*
