@@ -249,8 +249,17 @@ void SensorController::sortSensorRows(std::vector<SensorRowInfo>& sensorRows)
     // 연결된 센서만 논리 ID 기준 오름차순 정렬, 미연결 센서는 뒤로
     std::sort(sensorRows.begin(), sensorRows.end(), [](const SensorRowInfo &a, const SensorRowInfo &b)
     {
-        if (a.connected != b.connected) return a.connected > b.connected;
-        if (!a.connected && !b.connected) return a.idx < b.idx;
+        // 연결 상태가 다르면 연결된 센서를 앞으로
+        if (a.connected != b.connected) {
+            return a.connected > b.connected;
+        }
+        
+        // 둘 다 미연결이면 인덱스 순으로 정렬
+        if (!a.connected) {
+            return a.idx < b.idx;
+        }
+        
+        // 둘 다 연결되어 있으면 논리 ID 순으로 정렬
         return a.logicalId < b.logicalId;
     });
 }
