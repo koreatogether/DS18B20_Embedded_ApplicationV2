@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <DallasTemperature.h>
+#include <vector>
 #include "../domain/ITemperatureSensor.h"
 #include "../domain/SensorStatus.h"
 
