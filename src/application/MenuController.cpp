@@ -130,6 +130,7 @@ void MenuController::handleSensorIdMenuState()
     {
         sensorController.assignIDsByAddress();
         Serial.println("[자동] 주소순 ID 할당 완료");
+        sensorController.printSensorStatusTable();
         printSensorIdMenu();
     }
     else if (inputBuffer == "5")
