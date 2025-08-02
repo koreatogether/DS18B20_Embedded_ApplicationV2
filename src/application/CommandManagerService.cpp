@@ -39,6 +39,13 @@ void CommandManagerService::processSerialInput()
         {
             inputBuffer[bufferIndex++] = c;
         }
+        else
+        {
+            // 입력이 버퍼 크기를 초과한 경우
+            inputBuffer[sizeof(inputBuffer) - 1] = '\0';
+            Serial.println("Error: command too long. Buffer overflow prevented.");
+            bufferIndex = 0;
+        }
     }
 }
 

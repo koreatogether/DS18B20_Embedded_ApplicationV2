@@ -221,6 +221,7 @@ class CodeMetricsCollector:
                         re.search(r'class\s+(Mock|Test)[A-Z]\w+', content)):
                         interface_files.append(str(file_path.name))
                 except Exception as e:
+                    print(f"[WARN] Failed to read {file_path}: {e}")
                     continue
         
         # 인터페이스 파일 수에 따른 점수 계산

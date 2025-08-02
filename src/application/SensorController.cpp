@@ -170,7 +170,10 @@ void SensorController::updateSensorRows()
         }
         int logicalId = getSensorLogicalId(i);
         sensorRows.push_back({i, logicalId, {0}, temp, connected});
-        memcpy(sensorRows.back().addr, addr, sizeof(DeviceAddress));
+        for (size_t k = 0; k < sizeof(DeviceAddress); ++k)
+        {
+            sensorRows.back().addr[k] = addr[k];
+        }
     }
 
     // 연결된 센서만 논리 ID 기준 오름차순 정렬, 미연결 센서는 뒤로
