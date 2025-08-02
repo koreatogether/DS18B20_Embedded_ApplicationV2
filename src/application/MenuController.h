@@ -27,6 +27,7 @@ public:
 
     AppState getAppState() const { return appState; }
     void setAppState(AppState state) { appState = state; }
+    void resetToNormalState(); // 상태를 Normal로 완전히 리셋하는 함수
 
     int getSelectedSensorIdx() const { return selectedSensorIdx; }
     int getSelectedDisplayIdx() const { return selectedDisplayIdx; }

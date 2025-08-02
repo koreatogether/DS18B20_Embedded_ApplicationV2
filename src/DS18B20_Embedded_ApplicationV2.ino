@@ -18,6 +18,16 @@ bool firstLoop = true;
 void setup()
 {
     setupSerialAndSensor();
+    // 추가 안전장치: setup 완료 후 1초 대기하여 시리얼 통신 안정화
+    delay(1000);
+    
+    // 강제로 Normal 상태 확인 및 설정
+    menuController.resetToNormalState();
+    
+    Serial.println("=== 시스템 초기화 완료 ===");
+    Serial.print("현재 AppState: ");
+    Serial.println((int)menuController.getAppState());
+    Serial.println("센서 제어 메뉴 진입: 'menu' 또는 'm' 입력");
 }
 
 void loop()
@@ -40,6 +50,10 @@ void setupSerialAndSensor()
     Serial.println(__TIME__);
     sensors.begin();
     Serial.println("[DS18B20Sensor 초기화 완료]");
+    
+    // 명시적으로 Normal 상태로 초기화 및 상태 출력
+    menuController.setAppState(AppState::Normal);
+    Serial.println("[시스템 상태: Normal 모드로 초기화 완료]");
 }
 
 void handleNormalState(unsigned long now)

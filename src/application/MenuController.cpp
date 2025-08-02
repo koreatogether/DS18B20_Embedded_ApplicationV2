@@ -11,6 +11,11 @@ extern const unsigned long printInterval;
 
 MenuController::MenuController() : appState(AppState::Normal), selectedSensorIdx(-1), selectedDisplayIdx(-1)
 {
+    // 생성자에서 명시적으로 Normal 상태로 초기화
+    appState = AppState::Normal;
+    inputBuffer = "";
+    selectedSensorIndices.clear();
+    isMultiSelectMode = false;
 }
 
 // 입력 문자열에서 1~8 사이의 숫자만 추출, 중복 제거
@@ -74,6 +79,18 @@ void MenuController::handleSerialInput()
                 Serial.print("[DEBUG] inputBuffer: ");
                 Serial.println(inputBuffer);
 
+                // 전역 리셋 명령어 처리 (어떤 상태에서든 Normal로 복귀)
+                if (inputBuffer == "reset" || inputBuffer == "RESET")
+                {
+                    Serial.println("[INFO] 강제 리셋 명령어 수신");
+                    resetToNormalState();
+                    sensorController.printSensorStatusTable();
+                    lastPrint = millis();
+                    inputBuffer = "";
+                    while (Serial.available()) Serial.read();
+                    return;
+                }
+
                 switch (appState)
                 {
                 case AppState::Normal:
@@ -94,6 +111,13 @@ void MenuController::handleSerialInput()
                 case AppState::SensorIdChange_InputId:
                     handleSensorIdInputState();
                     break;
+                default:
+                    // 알 수 없는 상태인 경우 강제로 Normal 상태로 리셋
+                    Serial.println("[경고] 알 수 없는 상태 감지, Normal 상태로 리셋합니다.");
+                    resetToNormalState();
+                    sensorController.printSensorStatusTable();
+                    lastPrint = millis();
+                    break;
                 }
                 inputBuffer = "";
                 // 입력 처리 후 Serial 버퍼 완전 비우기 (테스트 자동화 환경 대응)
@@ -110,6 +134,18 @@ void MenuController::handleSerialInput()
     }
 }
 
+void MenuController::resetToNormalState()
+{
+    appState = AppState::Normal;
+    inputBuffer = "";
+    selectedSensorIdx = -1;
+    selectedDisplayIdx = -1;
+    selectedSensorIndices.clear();
+    isMultiSelectMode = false;
+    Serial.println("[DEBUG] 상태가 Normal로 완전히 리셋되었습니다.");
+    Serial.println("[시스템 준비 완료 - Normal 모드에서 대기 중]");
+}
+
 void MenuController::handleNormalState()
 {
     if (inputBuffer == "menu" || inputBuffer == "m")
@@ -117,6 +153,13 @@ void MenuController::handleNormalState()
         appState = AppState::Menu;
         Serial.println("[DEBUG] appState -> Menu");
         printMenu();
+    }
+    else if (inputBuffer == "reset" || inputBuffer == "r")
+    {
+        // 강제 리셋 명령어 추가
+        resetToNormalState();
+        sensorController.printSensorStatusTable();
+        lastPrint = millis();
     }
 }
 
@@ -273,14 +316,17 @@ void MenuController::handleSensorIdSelectState()
             return;
         }
 
-        // 선택된 센서 번호 안내
-        Serial.print("선택된 센서 번호: ");
-        for (int idx : selectedSensorIndices)
+        // 복수 선택 모드에서만 선택된 센서 번호 안내
+        if (isMultiSelectMode)
         {
-            Serial.print(idx);
-            Serial.print(" ");
+            Serial.print("선택된 센서 번호: ");
+            for (int idx : selectedSensorIndices)
+            {
+                Serial.print(idx);
+                Serial.print(" ");
+            }
+            Serial.println();
         }
-        Serial.println();
 
         // 첫 번째 센서부터 변경 확인 안내문 출력
         selectedDisplayIdx = selectedSensorIndices[0];
@@ -398,30 +444,41 @@ void MenuController::handleSensorIdInputState()
             Serial.print(newId);
             Serial.println("(으)로 변경 완료");
 
-            // 다음 센서로 이동
-            auto it = std::find(selectedSensorIndices.begin(), selectedSensorIndices.end(), selectedDisplayIdx);
-            if (it != selectedSensorIndices.end())
+            // 복수 선택 모드인지 개별 선택 모드인지 확인
+            if (isMultiSelectMode)
             {
-                size_t currentIndex = std::distance(selectedSensorIndices.begin(), it);
-                if (currentIndex + 1 < selectedSensorIndices.size())
+                // 복수 선택 모드: 다음 센서로 이동
+                auto it = std::find(selectedSensorIndices.begin(), selectedSensorIndices.end(), selectedDisplayIdx);
+                if (it != selectedSensorIndices.end())
                 {
-                    selectedDisplayIdx = selectedSensorIndices[currentIndex + 1];
-                    const auto *sortedRows = sensorController.getSortedSensorRows();
-                    selectedSensorIdx = sortedRows[selectedDisplayIdx - 1].idx;
-                    appState = AppState::SensorIdChange_ConfirmSensor;
-                    Serial.println("[DEBUG] appState -> SensorIdChange_ConfirmSensor (다음 센서)");
-                    Serial.print("센서 ");
-                    Serial.print(selectedDisplayIdx);
-                    Serial.println("번을 변경할까요? (y/n, 취소:c)");
+                    size_t currentIndex = std::distance(selectedSensorIndices.begin(), it);
+                    if (currentIndex + 1 < selectedSensorIndices.size())
+                    {
+                        selectedDisplayIdx = selectedSensorIndices[currentIndex + 1];
+                        const auto *sortedRows = sensorController.getSortedSensorRows();
+                        selectedSensorIdx = sortedRows[selectedDisplayIdx - 1].idx;
+                        appState = AppState::SensorIdChange_ConfirmSensor;
+                        Serial.println("[DEBUG] appState -> SensorIdChange_ConfirmSensor (다음 센서)");
+                        Serial.print("센서 ");
+                        Serial.print(selectedDisplayIdx);
+                        Serial.println("번을 변경할까요? (y/n, 취소:c)");
+                    }
+                    else
+                    {
+                        // 마지막 센서였으면 메뉴로 복귀
+                        appState = AppState::SensorIdMenu;
+                        Serial.println("[DEBUG] appState -> SensorIdMenu (모두 완료)");
+                        sensorController.printSensorStatusTable();
+                        printSensorIdMenu();
+                    }
                 }
-                else
-                {
-                    // 마지막 센서였으면 메뉴로 복귀
-                    appState = AppState::SensorIdMenu;
-                    Serial.println("[DEBUG] appState -> SensorIdMenu (모두 완료)");
-                    sensorController.printSensorStatusTable();
-                    printSensorIdMenu();
-                }
+            }
+            else
+            {
+                // 개별 선택 모드: 센서 선택 입력 상태로 복귀
+                appState = AppState::SensorIdChange_SelectSensor;
+                Serial.println("[DEBUG] appState -> SensorIdChange_SelectSensor (개별 모드 계속)");
+                Serial.print("변경할 센서 번호(1~8, 취소:c) 입력: ");
             }
         }
     }
