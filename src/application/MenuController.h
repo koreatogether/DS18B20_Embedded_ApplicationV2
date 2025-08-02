@@ -1,4 +1,3 @@
-
 #pragma once
 #include <Arduino.h>
 #include <vector>
@@ -39,6 +38,7 @@ private:
     String inputBuffer;
     int selectedSensorIdx;
     int selectedDisplayIdx;
+    bool isMultiSelectMode = false;
 
     void handleNormalState();
     void handleMenuState();

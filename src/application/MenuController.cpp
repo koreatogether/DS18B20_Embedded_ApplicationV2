@@ -138,7 +138,9 @@ void MenuController::handleMenuState()
     else
     {
         Serial.println("지원하지 않는 메뉴입니다. 1~3 중 선택하세요.");
+        // 메뉴 안내문만 출력, 상태 전환 없음
         printMenu();
+        return;
     }
 }
 
@@ -146,6 +148,7 @@ void MenuController::handleSensorIdMenuState()
 {
     if (inputBuffer == "1")
     {
+        isMultiSelectMode = false;
         appState = AppState::SensorIdChange_SelectSensor;
         Serial.println("[DEBUG] appState -> SensorIdChange_SelectSensor");
         Serial.println("[개별 센서 ID 변경] 센서 상태창:");
@@ -154,6 +157,7 @@ void MenuController::handleSensorIdMenuState()
     }
     else if (inputBuffer == "2")
     {
+        isMultiSelectMode = true;
         Serial.println("[복수 센서 ID 변경] 센서 상태창:");
         sensorController.printSensorStatusTable();
         Serial.print("변경할 센서 번호들을 입력하세요 (예: 1 2 3, 123, 1,2,3,4, 12 34, 1 2345, 취소:c): ");
@@ -210,27 +214,30 @@ void MenuController::handleSensorIdSelectState()
         if (selectedSensorIndices.empty())
         {
             Serial.println("[오류] 연결된 센서만 선택할 수 있습니다. (1~8)");
-            Serial.print("변경할 센서 번호들을 입력하세요 (예: 1 2 3, 123, 1,2,3,4, 12 34, 1 2345, 취소:c): ");
+            if (isMultiSelectMode)
+                Serial.print("변경할 센서 번호들을 입력하세요 (예: 1 2 3, 123, 1,2,3,4, 12 34, 1 2345, 취소:c): ");
+            else
+                Serial.print("변경할 센서 번호(1~8, 취소:c) 입력: ");
+            return;
         }
-        else
+
+        // 선택된 센서 번호 안내
+        Serial.print("선택된 센서 번호: ");
+        for (int idx : selectedSensorIndices)
         {
-            Serial.print("선택된 센서 번호: ");
-            for (int idx : selectedSensorIndices)
-            {
-                Serial.print(idx);
-                Serial.print(" ");
-            }
-            Serial.println();
-            // TODO: 각 센서에 대해 ID 변경 절차로 진입 (다음 단계)
-            // 예시: 첫 센서부터 변경 시작
-            selectedDisplayIdx = selectedSensorIndices[0];
-            selectedSensorIdx = sortedRows[selectedDisplayIdx - 1].idx;
-            appState = AppState::SensorIdChange_ConfirmSensor;
-            Serial.println("[DEBUG] appState -> SensorIdChange_ConfirmSensor (복수 선택)");
-            Serial.print("센서 ");
-            Serial.print(selectedDisplayIdx);
-            Serial.println("번을 변경할까요? (y/n, 취소:c)");
+            Serial.print(idx);
+            Serial.print(" ");
         }
+        Serial.println();
+
+        // 첫 번째 센서부터 변경 확인 안내문 출력
+        selectedDisplayIdx = selectedSensorIndices[0];
+        selectedSensorIdx = sortedRows[selectedDisplayIdx - 1].idx;
+        appState = AppState::SensorIdChange_ConfirmSensor;
+        Serial.println("[DEBUG] appState -> SensorIdChange_ConfirmSensor");
+        Serial.print("센서 ");
+        Serial.print(selectedDisplayIdx);
+        Serial.println("번을 변경할까요? (y/n, 취소:c)");
     }
 }
 
@@ -249,6 +256,8 @@ void MenuController::handleSensorIdConfirmState()
         appState = AppState::SensorIdChange_SelectSensor;
         Serial.println("[DEBUG] appState -> SensorIdChange_SelectSensor");
         Serial.print("변경할 센서 번호(1~8, 취소:c) 입력: ");
+        // 단일 선택일 경우 메뉴로 복귀하지 않음
+        return;
     }
     else if (inputBuffer == "c" || inputBuffer == "C")
     {
@@ -291,10 +300,8 @@ void MenuController::handleSensorIdConfirmState()
                 return;
             }
         }
-        // 마지막 센서까지 완료 또는 단일 선택이면 메뉴로 복귀
-        appState = AppState::SensorIdMenu;
-        Serial.println("[DEBUG] appState -> SensorIdMenu");
-        printSensorIdMenu();
+        // 단일 선택일 경우 메뉴로 복귀하지 않음 (위에서 return 처리)
+        return;
     }
     else if (inputBuffer == "c" || inputBuffer == "C")
     {
