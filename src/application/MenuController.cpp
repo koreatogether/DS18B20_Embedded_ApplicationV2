@@ -9,13 +9,15 @@ extern SensorController sensorController;
 extern unsigned long lastPrint;
 extern const unsigned long printInterval;
 
-MenuController::MenuController() : appState(AppState::Normal), selectedSensorIdx(-1), selectedDisplayIdx(-1)
+MenuController::MenuController() 
+    : appState(AppState::Normal), 
+      selectedSensorIdx(-1), 
+      selectedDisplayIdx(-1),
+      inputBuffer(""),
+      isMultiSelectMode(false)
 {
-    // 생성자에서 명시적으로 Normal 상태로 초기화
-    appState = AppState::Normal;
-    inputBuffer = "";
-    selectedSensorIndices.clear();
-    isMultiSelectMode = false;
+    // selectedSensorIndices는 기본 생성자로 빈 벡터로 초기화됨
+    selectedSensorIndices.clear(); // 명시적으로 비우기 (선택사항)
 }
 
 // 입력 문자열에서 1~8 사이의 숫자만 추출, 중복 제거
