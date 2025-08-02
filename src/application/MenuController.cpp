@@ -69,9 +69,18 @@ void MenuController::printSensorIdMenu()
 
 void MenuController::handleSerialInput()
 {
-    while (Serial.available())
+    // 안전한 입력 처리를 위한 최대 반복 횟수 제한
+    const int MAX_CHARS_PER_CALL = 64;
+    int charCount = 0;
+    
+    while (Serial.available() && charCount < MAX_CHARS_PER_CALL)
     {
-        char c = Serial.read();
+        int readResult = Serial.read();
+        if (readResult == -1) break; // 읽기 실패 시 종료
+        
+        char c = static_cast<char>(readResult);
+        charCount++;
+        
         if (c == '\r' || c == '\n')
         {
             if (inputBuffer.length() > 0)
@@ -81,7 +90,11 @@ void MenuController::handleSerialInput()
         }
         else if (!isspace(c))
         {
-            inputBuffer += c;
+            // 버퍼 오버플로우 방지
+            if (inputBuffer.length() < 32)
+            {
+                inputBuffer += c;
+            }
         }
     }
 }
@@ -554,8 +567,14 @@ void MenuController::clearInputBuffer()
 {
     inputBuffer = "";
     // 입력 처리 후 Serial 버퍼 완전 비우기 (테스트 자동화 환경 대응)
-    while (Serial.available())
+    // 무한 루프 방지를 위한 최대 반복 횟수 제한
+    const int MAX_CLEAR_CHARS = 128;
+    int clearCount = 0;
+    
+    while (Serial.available() && clearCount < MAX_CLEAR_CHARS)
     {
-        Serial.read();
+        int readResult = Serial.read();
+        if (readResult == -1) break; // 읽기 실패 시 종료
+        clearCount++;
     }
 }

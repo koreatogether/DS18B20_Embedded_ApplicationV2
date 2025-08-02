@@ -22,9 +22,17 @@ void CommandManagerService::update()
 
 void CommandManagerService::processSerialInput()
 {
-    while (Serial.available() > 0)
+    // 안전한 입력 처리를 위한 최대 반복 횟수 제한
+    const int MAX_CHARS_PER_CALL = 64;
+    int charCount = 0;
+    
+    while (Serial.available() > 0 && charCount < MAX_CHARS_PER_CALL)
     {
-        char c = Serial.read();
+        int readResult = Serial.read();
+        if (readResult == -1) break; // 읽기 실패 시 종료
+        
+        char c = static_cast<char>(readResult);
+        charCount++;
 
         if (c == '\n' || c == '\r')
         {

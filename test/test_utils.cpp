@@ -22,6 +22,7 @@ std::string makeTableLine(int idx, const MockTemperatureSensor::Entry &entry)
     char buf[128];
     snprintf(buf, sizeof(buf),
              "%2d   | %2d  | 0x%010llX | %7.1f°C | %7.1f°C | %-6s   | %7.1f°C | %-6s   | %-6s",
-             idx + 1, idx + 1, entry.address, entry.temperature, 30.0f, "정상", 20.0f, "정상", "정상");
+             idx + 1, idx + 1, static_cast<unsigned long long>(entry.address), 
+             entry.temperature, 30.0f, "정상", 20.0f, "정상", "정상");
     return std::string(buf);
 }
