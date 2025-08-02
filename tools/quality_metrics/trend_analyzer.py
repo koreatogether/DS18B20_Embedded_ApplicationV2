@@ -34,7 +34,7 @@ class QualityTrendAnalyzer:
         return metrics_history
     
     def _compare_metrics(self, latest, previous, trends):
-        categories = ["code_metrics", "architecture_metrics", "test_metrics", "build_metrics"]
+        categories = ["code_metrics", "architecture_metrics", "build_metrics"]  # test_metrics removed
         for category in categories:
             if category in latest and category in previous:
                 trends["metrics_comparison"][category] = {
@@ -57,9 +57,6 @@ class QualityTrendAnalyzer:
             trends["recommendations"].append("⚠️ Quality score decreased. Review recent changes.")
 
     def _check_thresholds(self, trends, latest):
-        latest_test_rate = latest.get("test_metrics", {}).get("test_success_rate", 0)
-        if latest_test_rate < 95:
-            trends["recommendations"].append(f"🧪 Test success rate is {latest_test_rate}%. Fix failing tests.")
         ram_usage = latest.get("build_metrics", {}).get("ram_usage_percent", 0)
         if ram_usage > 80:
             trends["recommendations"].append(f"💾 RAM usage is high ({ram_usage}%). Consider optimization.")

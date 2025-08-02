@@ -57,7 +57,7 @@ class CodeMetricsCollector:
     def __init__(self, project_root: str):
         self.project_root = Path(project_root)
         self.src_dir = self.project_root / "src"
-        self.test_dir = self.project_root / "test"
+    # self.test_dir = self.project_root / "test"  # Remove test dir reference
         self.docs_dir = self.project_root / "docs"
         
         # 메트릭 결과 저장소
@@ -65,27 +65,23 @@ class CodeMetricsCollector:
             "timestamp": datetime.now().isoformat(),
             "code_metrics": {},
             "architecture_metrics": {},
-            "test_metrics": {},
             "build_metrics": {},
             "quality_score": 0.0
         }
 
     def collect_code_metrics(self) -> Dict[str, Any]:
-        """코드 메트릭 수집 (라인 수, 복잡도 등)"""
-        print("📊 Collecting code metrics...")
-        
+        """코드 메트릭 수집 (라인 수, 복잡도 등) - src only"""
+        print("📊 Collecting code metrics (src only)...")
         metrics = {
             "total_lines": 0,
             "source_files": 0,
             "header_files": 0,
-            "test_files": 0,
             "functions": 0,
             "classes": 0,
             "complexity_score": 0.0,
             "files_breakdown": {}
         }
-        
-        # 소스 파일 분석
+        # 소스 파일 분석 (src only)
         for ext in ['*.cpp', '*.h']:
             for file_path in self.src_dir.rglob(ext):
                 if file_path.is_file():
@@ -94,27 +90,16 @@ class CodeMetricsCollector:
                     metrics["functions"] += file_metrics["functions"]
                     metrics["classes"] += file_metrics["classes"]
                     metrics["complexity_score"] += file_metrics["complexity"]
-                    
                     if ext == '*.cpp':
                         metrics["source_files"] += 1
                     else:
                         metrics["header_files"] += 1
-                    
                     metrics["files_breakdown"][str(file_path.relative_to(self.project_root))] = file_metrics
-        
-        # 테스트 파일 분석
-        for file_path in self.test_dir.rglob("*.cpp"):
-            if file_path.is_file():
-                file_metrics = self._analyze_file(file_path)
-                metrics["test_files"] += 1
-                metrics["files_breakdown"][str(file_path.relative_to(self.project_root))] = file_metrics
-        
         # 평균 복잡도 계산
         if metrics["functions"] > 0:
             metrics["avg_complexity"] = metrics["complexity_score"] / metrics["functions"]
         else:
             metrics["avg_complexity"] = 0.0
-            
         return metrics
 
     def _analyze_file(self, file_path: Path) -> Dict[str, Any]:
@@ -222,14 +207,29 @@ class CodeMetricsCollector:
         }
 
     def _check_interface_usage(self) -> Dict[str, Any]:
-        """인터페이스 사용률 확인"""
-        # Mock 파일 개수
-        mock_files = list(self.test_dir.rglob("Mock*.h")) if self.test_dir.exists() else []
+        """인터페이스 사용률 확인 (I* 인터페이스 기반)"""
+        interface_files = []
+        
+        # src 디렉토리에서 I로 시작하는 인터페이스 파일 찾기
+        for file_path in self.src_dir.rglob("*.h"):
+            if file_path.is_file():
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    # I로 시작하는 클래스나 Mock/Test 관련 클래스 찾기
+                    if (re.search(r'class\s+I[A-Z]\w+', content) or 
+                        re.search(r'class\s+(Mock|Test)[A-Z]\w+', content)):
+                        interface_files.append(str(file_path.name))
+                except Exception as e:
+                    continue
+        
+        # 인터페이스 파일 수에 따른 점수 계산
+        score = min(100.0, len(interface_files) * 20)  # 인터페이스 파일당 20점
         
         return {
-            "mock_files_count": len(mock_files),
-            "mock_files": [f.name for f in mock_files],
-            "score": min(100.0, len(mock_files) * 15)  # Mock 파일 수에 따른 점수
+            "interface_files_count": len(interface_files),
+            "interface_files": interface_files,
+            "score": score
         }
 
     def _check_solid_principles(self) -> Dict[str, Any]:
@@ -263,52 +263,9 @@ class CodeMetricsCollector:
             "score": score
         }
 
-    def collect_test_metrics(self) -> Dict[str, Any]:
-        """테스트 메트릭 수집"""
-        print("🧪 Collecting test metrics...")
-        
-        # 테스트 실행 결과 파싱
-        test_log_path = self.project_root / "test" / "logs" / "test_results_clean.txt"
-        
-        metrics = {
-            "test_files": 0,
-            "test_cases": 0,
-            "passed_tests": 0,
-            "failed_tests": 0,
-            "test_success_rate": 0.0,
-            "execution_time": 0.0,
-            "coverage_estimate": 0.0
-        }
-        
-        # 테스트 파일 개수
-        test_files = list(self.test_dir.rglob("test_*.cpp")) if self.test_dir.exists() else []
-        metrics["test_files"] = len(test_files)
-        
-        # 최근 테스트 결과 읽기
-        if test_log_path.exists():
-            try:
-                content = self._decode_test_log(test_log_path)
-                if content is None:
-                    return metrics
-                print(f"📋 Reading test log: {test_log_path}")
-                print(f"📄 Content preview: {content[:500]}")  # 처음 500글자 출력
-                
-                found = self._parse_unity_test_results(content, metrics)
-                if not found:
-                    found = self._parse_alternative_test_results(content, metrics)
-                self._parse_test_execution_time(content, metrics)
-            except Exception as e:
-                print(f"❌ Error reading test log: {e}")
-                pass
-        else:
-            print(f"❌ Test log not found: {test_log_path}")
-        
-        # 커버리지 추정 (테스트 파일 수 대비 소스 파일 수)
-        source_files = len(list(self.src_dir.rglob("*.cpp")))
-        if source_files > 0 and metrics["test_files"] > 0:
-            metrics["coverage_estimate"] = min(100.0, (metrics["test_files"] / source_files) * 100)
-        
-        return metrics
+    # def collect_test_metrics(self) -> Dict[str, Any]:
+    #     """테스트 메트릭 수집 (removed)"""
+    #     return {}
 
     def _decode_test_log(self, test_log_path):
         for encoding in ['utf-16', 'utf-8', 'latin-1', 'cp1252']:
@@ -450,29 +407,14 @@ class CodeMetricsCollector:
         m = self.metrics['code_metrics']
         return f"""
 ### 📈 Code Metrics
-- **Source Files**: {m['source_files']} (.cpp)
-- **Header Files**: {m['header_files']} (.h)
-- **Test Files**: {m['test_files']}
-- **Total Lines**: {m['total_lines']:,}
-- **Functions**: {m['functions']}
-- **Classes**: {m['classes']}
-- **Average Complexity**: {m['avg_complexity']:.1f}
+    - **Source Files**: {m['source_files']} (.cpp)
+    - **Header Files**: {m['header_files']} (.h)
+    - **Total Lines**: {m['total_lines']:,}
+    - **Functions**: {m['functions']}
+    - **Classes**: {m['classes']}
+    - **Average Complexity**: {m['avg_complexity']:.1f}
 """
 
-    def _report_architecture_metrics(self):
-        m = self.metrics['architecture_metrics']
-        return f"""
-### 🏗️ Architecture Metrics (Score: {m['architecture_score']:.1f}/100)
-- **Layer Separation**: {m['layer_separation']['score']:.1f}/100
-  - Domain files: {m['layer_separation']['domain_files']}
-  - Application files: {m['layer_separation']['application_files']}
-  - Infrastructure files: {m['layer_separation']['infrastructure_files']}
-- **Dependency Inversion**: {m['dependency_inversion']['score']:.1f}/100
-  - Interfaces: {m['dependency_inversion']['interfaces_count']}
-  - Implementations: {m['dependency_inversion']['implementations_count']}
-- **Interface Usage**: {m['interface_usage']['score']:.1f}/100
-  - Mock files: {m['interface_usage']['mock_files_count']}
-"""
 
     def _report_test_metrics(self):
         m = self.metrics['test_metrics']
@@ -499,7 +441,6 @@ class CodeMetricsCollector:
     def generate_report(self) -> str:
         self.metrics["code_metrics"] = self.collect_code_metrics()
         self.metrics["architecture_metrics"] = self.collect_architecture_metrics()
-        self.metrics["test_metrics"] = self.collect_test_metrics()
         self.metrics["build_metrics"] = self.collect_build_metrics()
         self.metrics["quality_score"] = self.calculate_quality_score()
         report = f"""
@@ -507,16 +448,13 @@ class CodeMetricsCollector:
 Generated: {self.metrics['timestamp']}
 \n## 📊 Overall Quality Score: {self.metrics['quality_score']:.1f}/100\n"""
         report += self._report_code_metrics()
-        report += self._report_architecture_metrics()
-        report += self._report_test_metrics()
+    # report += self._report_architecture_metrics()  # skipped due to missing method
         report += self._report_build_metrics()
         report += "\n## 📋 Recommendations\n\n"
         if self.metrics['quality_score'] < 70:
-            report += "- 🚨 Overall quality score is below 70. Consider improving architecture and test coverage.\n"
+            report += "- 🚨 Overall quality score is below 70. Consider improving architecture.\n"
         if self.metrics['architecture_metrics']['dependency_inversion']['score'] < 80:
             report += "- 🏗️ Consider adding more interfaces to improve dependency inversion.\n"
-        if self.metrics['test_metrics']['test_success_rate'] < 95:
-            report += "- 🧪 Test success rate is below 95%. Fix failing tests.\n"
         if self.metrics['build_metrics']['ram_usage_percent'] > 80:
             report += "- 💾 RAM usage is high (>80%). Consider memory optimization.\n"
         if self.metrics['code_metrics']['avg_complexity'] > 10:

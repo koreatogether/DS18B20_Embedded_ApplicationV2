@@ -2,8 +2,8 @@
 #include <unity.h>
 #include <vector>
 #include <string>
-#include "mocks/MockTemperatureSensor.h"
-#include "mocks/HeaderOnlyTemperatureSensorManager.h"
+#include "../mocks/MockTemperatureSensor.h"
+#include "../mocks/HeaderOnlyTemperatureSensorManager.h"
 
 inline std::vector<MockTemperatureSensor::Entry> getMockData()
 {
