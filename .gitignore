@@ -73,3 +73,7 @@ lib/**
 /*
 !src/
 !test/
+
+
+#Ignore insiders AI rules
+.github\copilot-instructions.md

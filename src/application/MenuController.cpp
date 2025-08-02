@@ -2,6 +2,8 @@
 #include "SensorController.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <vector>
+#include <algorithm>
 
 extern SensorController sensorController;
 extern unsigned long lastPrint;
@@ -11,6 +13,30 @@ MenuController::MenuController() : appState(AppState::Normal), selectedSensorIdx
 {
 }
 
+// 입력 문자열에서 1~8 사이의 숫자만 추출, 중복 제거
+std::vector<int> MenuController::parseSensorIndices(const String &input)
+{
+    std::vector<int> indices;
+    bool used[9] = {false}; // 1~8만 사용
+    int len = input.length();
+    for (int i = 0; i < len; ++i)
+    {
+        char c = input.charAt(i);
+        if (c >= '1' && c <= '8')
+        {
+            int idx = c - '0';
+            if (!used[idx])
+            {
+                indices.push_back(idx);
+                used[idx] = true;
+            }
+        }
+    }
+    return indices;
+}
+
+#include "MenuController.h"
+#include "SensorController.h"
 void MenuController::printMenu()
 {
     Serial.println();
@@ -126,6 +152,13 @@ void MenuController::handleSensorIdMenuState()
         sensorController.printSensorStatusTable();
         Serial.print("변경할 센서 번호(1~8, 취소:c) 입력: ");
     }
+    else if (inputBuffer == "2")
+    {
+        Serial.println("[복수 센서 ID 변경] 센서 상태창:");
+        sensorController.printSensorStatusTable();
+        Serial.print("변경할 센서 번호들을 입력하세요 (예: 1 2 3, 123, 1,2,3,4, 12 34, 1 2345, 취소:c): ");
+        appState = AppState::SensorIdChange_SelectSensor;
+    }
     else if (inputBuffer == "3")
     {
         sensorController.assignIDsByAddress();
@@ -163,28 +196,40 @@ void MenuController::handleSensorIdSelectState()
     }
     else
     {
-        int sensorIdx = inputBuffer.toInt();
-        Serial.print("[DEBUG] sensorIdx: ");
-        Serial.println(sensorIdx);
+        // 복수 센서 선택 입력 처리
+        std::vector<int> indices = MenuController::parseSensorIndices(inputBuffer);
         const auto *sortedRows = sensorController.getSortedSensorRows();
-        if (sensorIdx >= 1 && sensorIdx <= SENSOR_MAX_COUNT && sortedRows[sensorIdx - 1].connected)
+        selectedSensorIndices.clear();
+        for (int idx : indices)
         {
-            selectedDisplayIdx = sensorIdx;
-            selectedSensorIdx = sortedRows[sensorIdx - 1].idx;
-            Serial.print("[DEBUG] selectedDisplayIdx (번호): ");
-            Serial.println(selectedDisplayIdx);
-            Serial.print("[DEBUG] selectedSensorIdx (물리 인덱스): ");
-            Serial.println(selectedSensorIdx);
-            appState = AppState::SensorIdChange_ConfirmSensor;
-            Serial.println("[DEBUG] appState -> SensorIdChange_ConfirmSensor");
-            Serial.print("센서 ");
-            Serial.print(selectedDisplayIdx);
-            Serial.println("번을 변경할까요? (y/n, 취소:c)");
+            if (idx >= 1 && idx <= SENSOR_MAX_COUNT && sortedRows[idx - 1].connected)
+            {
+                selectedSensorIndices.push_back(idx);
+            }
+        }
+        if (selectedSensorIndices.empty())
+        {
+            Serial.println("[오류] 연결된 센서만 선택할 수 있습니다. (1~8)");
+            Serial.print("변경할 센서 번호들을 입력하세요 (예: 1 2 3, 123, 1,2,3,4, 12 34, 1 2345, 취소:c): ");
         }
         else
         {
-            Serial.println("[오류] 연결된 센서만 선택할 수 있습니다. (1~8)");
-            Serial.print("변경할 센서 번호(1~8, 취소:c) 입력: ");
+            Serial.print("선택된 센서 번호: ");
+            for (int idx : selectedSensorIndices)
+            {
+                Serial.print(idx);
+                Serial.print(" ");
+            }
+            Serial.println();
+            // TODO: 각 센서에 대해 ID 변경 절차로 진입 (다음 단계)
+            // 예시: 첫 센서부터 변경 시작
+            selectedDisplayIdx = selectedSensorIndices[0];
+            selectedSensorIdx = sortedRows[selectedDisplayIdx - 1].idx;
+            appState = AppState::SensorIdChange_ConfirmSensor;
+            Serial.println("[DEBUG] appState -> SensorIdChange_ConfirmSensor (복수 선택)");
+            Serial.print("센서 ");
+            Serial.print(selectedDisplayIdx);
+            Serial.println("번을 변경할까요? (y/n, 취소:c)");
         }
     }
 }
@@ -204,6 +249,52 @@ void MenuController::handleSensorIdConfirmState()
         appState = AppState::SensorIdChange_SelectSensor;
         Serial.println("[DEBUG] appState -> SensorIdChange_SelectSensor");
         Serial.print("변경할 센서 번호(1~8, 취소:c) 입력: ");
+    }
+    else if (inputBuffer == "c" || inputBuffer == "C")
+    {
+        appState = AppState::SensorIdMenu;
+        Serial.println("[DEBUG] appState -> SensorIdMenu");
+        printSensorIdMenu();
+    }
+    else
+    {
+        Serial.println("y(예), n(아니오), c(취소) 중 하나를 입력하세요.");
+        Serial.print("센서 ");
+        Serial.print(selectedDisplayIdx);
+        Serial.println("번을 변경할까요? (y/n, 취소:c)");
+    }
+    if (inputBuffer == "y" || inputBuffer == "Y")
+    {
+        appState = AppState::SensorIdChange_InputId;
+        Serial.println("[DEBUG] appState -> SensorIdChange_InputId");
+        Serial.print("센서 ");
+        Serial.print(selectedDisplayIdx);
+        Serial.println("의 새로운 ID(1~8, 취소:c)를 입력하세요: ");
+    }
+    else if (inputBuffer == "n" || inputBuffer == "N")
+    {
+        // 복수 선택일 경우 다음 센서로 진행
+        auto it = std::find(selectedSensorIndices.begin(), selectedSensorIndices.end(), selectedDisplayIdx);
+        if (it != selectedSensorIndices.end() && selectedSensorIndices.size() > 1)
+        {
+            size_t idx = std::distance(selectedSensorIndices.begin(), it);
+            if (idx + 1 < selectedSensorIndices.size())
+            {
+                selectedDisplayIdx = selectedSensorIndices[idx + 1];
+                const auto *sortedRows = sensorController.getSortedSensorRows();
+                selectedSensorIdx = sortedRows[selectedDisplayIdx - 1].idx;
+                appState = AppState::SensorIdChange_ConfirmSensor;
+                Serial.println("[DEBUG] appState -> SensorIdChange_ConfirmSensor (다음 센서)");
+                Serial.print("센서 ");
+                Serial.print(selectedDisplayIdx);
+                Serial.println("번을 변경할까요? (y/n, 취소:c)");
+                return;
+            }
+        }
+        // 마지막 센서까지 완료 또는 단일 선택이면 메뉴로 복귀
+        appState = AppState::SensorIdMenu;
+        Serial.println("[DEBUG] appState -> SensorIdMenu");
+        printSensorIdMenu();
     }
     else if (inputBuffer == "c" || inputBuffer == "C")
     {
@@ -257,6 +348,61 @@ void MenuController::handleSensorIdInputState()
         else
         {
             Serial.println("[오류] ID는 1~8 사이의 숫자여야 합니다. 다시 입력하세요 (취소:c)");
+        }
+    }
+    if (inputBuffer == "c" || inputBuffer == "C")
+    {
+        appState = AppState::SensorIdMenu;
+        Serial.println("[DEBUG] appState -> SensorIdMenu (취소)");
+        printSensorIdMenu();
+    }
+    else
+    {
+        int newId = inputBuffer.toInt();
+        Serial.print("[DEBUG] 입력된 newId: ");
+        Serial.println(newId);
+        if (newId >= 1 && newId <= SENSOR_MAX_COUNT)
+        {
+            if (sensorController.isIdDuplicated(newId, selectedSensorIdx))
+            {
+                Serial.println("[오류] 이미 사용 중인 ID입니다. 다른 값을 입력하세요 (취소:c)");
+            }
+            else
+            {
+                sensorController.setSensorLogicalId(selectedSensorIdx, newId);
+                Serial.print("센서 ");
+                Serial.print(selectedDisplayIdx);
+                Serial.print("의 ID를 ");
+                Serial.print(newId);
+                Serial.println("(으)로 변경 완료 (센서 EEPROM 저장)");
+                delay(30);
+                sensorController.printSensorStatusTable();
+                // 복수 선택일 경우 다음 센서로 진행
+                auto it = std::find(selectedSensorIndices.begin(), selectedSensorIndices.end(), selectedDisplayIdx);
+                if (it != selectedSensorIndices.end() && selectedSensorIndices.size() > 1)
+                {
+                    size_t idx = std::distance(selectedSensorIndices.begin(), it);
+                    if (idx + 1 < selectedSensorIndices.size())
+                    {
+                        selectedDisplayIdx = selectedSensorIndices[idx + 1];
+                        const auto *sortedRows = sensorController.getSortedSensorRows();
+                        selectedSensorIdx = sortedRows[selectedDisplayIdx - 1].idx;
+                        appState = AppState::SensorIdChange_ConfirmSensor;
+                        Serial.println("[DEBUG] appState -> SensorIdChange_ConfirmSensor (다음 센서)");
+                        Serial.print("센서 ");
+                        Serial.print(selectedDisplayIdx);
+                        Serial.println("번을 변경할까요? (y/n, 취소:c)");
+                        return;
+                    }
+                }
+                // 마지막 센서까지 완료 또는 단일 선택이면 메뉴로 복귀
+                appState = AppState::SensorIdMenu;
+                printSensorIdMenu();
+            }
+        }
+        else
+        {
+            Serial.println("[오류] 1~8 사이의 값을 입력하세요 (취소:c)");
         }
     }
 }

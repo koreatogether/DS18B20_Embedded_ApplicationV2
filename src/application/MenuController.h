@@ -1,5 +1,7 @@
+
 #pragma once
 #include <Arduino.h>
+#include <vector>
 
 enum class AppState
 {
@@ -16,6 +18,8 @@ enum class AppState
 class MenuController
 {
 public:
+    // 복수 센서 인덱스 파싱 함수
+    static std::vector<int> parseSensorIndices(const String &input);
     MenuController();
 
     void printMenu();
@@ -29,6 +33,8 @@ public:
     int getSelectedDisplayIdx() const { return selectedDisplayIdx; }
 
 private:
+    // 복수 센서 선택용 멤버 변수
+    std::vector<int> selectedSensorIndices;
     AppState appState;
     String inputBuffer;
     int selectedSensorIdx;
