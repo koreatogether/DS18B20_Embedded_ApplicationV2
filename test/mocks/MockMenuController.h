@@ -85,35 +85,11 @@ public:
     {
         if (appState == AppState::Menu)
         {
-            if (input == "1")
-            {
-                appState = AppState::SensorIdMenu;
-            }
-            else if (input == "3")
-            {
-                appState = AppState::Normal;
-            }
+            handleMenuStateInput(input);
         }
         else if (appState == AppState::SensorIdMenu)
         {
-            if (input == "1")
-            {
-                isMultiSelectMode = false;
-                appState = AppState::SensorIdChange_SelectSensor;
-            }
-            else if (input == "2")
-            {
-                isMultiSelectMode = true;
-                appState = AppState::SensorIdChange_SelectSensor;
-            }
-            else if (input == "5")
-            {
-                appState = AppState::Menu;
-            }
-            else if (input == "6")
-            {
-                appState = AppState::Normal;
-            }
+            handleSensorIdMenuStateInput(input);
         }
     }
 
@@ -142,4 +118,49 @@ private:
     int selectedDisplayIdx;
     bool isMultiSelectMode;
     std::string mockOutput;
+    
+    // Helper methods for simulateMenuInput
+    void handleMenuStateInput(const std::string &input)
+    {
+        if (input == "1")
+        {
+            appState = AppState::SensorIdMenu;
+        }
+        else if (input == "3")
+        {
+            appState = AppState::Normal;
+        }
+    }
+    
+    void handleSensorIdMenuStateInput(const std::string &input)
+    {
+        if (input == "1")
+        {
+            configureSingleSelectMode();
+        }
+        else if (input == "2")
+        {
+            configureMultiSelectMode();
+        }
+        else if (input == "5")
+        {
+            appState = AppState::Menu;
+        }
+        else if (input == "6")
+        {
+            appState = AppState::Normal;
+        }
+    }
+    
+    void configureSingleSelectMode()
+    {
+        isMultiSelectMode = false;
+        appState = AppState::SensorIdChange_SelectSensor;
+    }
+    
+    void configureMultiSelectMode()
+    {
+        isMultiSelectMode = true;
+        appState = AppState::SensorIdChange_SelectSensor;
+    }
 };

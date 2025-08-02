@@ -47,4 +47,29 @@ private:
     void handleSensorIdSelectState();
     void handleSensorIdConfirmState();
     void handleSensorIdInputState();
+    
+    // Helper methods for handleSensorIdSelectState
+    bool validateSensorInput();
+    bool processSensorIndices(const std::vector<int>& indices);
+    void proceedToSensorConfirmation();
+    void printSensorSelectionPrompt();
+    
+    // Helper methods for handleSensorIdInputState
+    void handleCancelInput();
+    bool processNewSensorId(int newId);
+    void moveToNextSensor();
+    void completeIdChange();
+    void printIdInputPrompt();
+    
+    // Helper methods for handleSensorIdConfirmState
+    void handleConfirmYes();
+    void handleConfirmNoOrCancel();
+    void handleInvalidConfirmInput();
+    void moveToNextSensorInConfirm();
+    
+    // Helper methods for handleSerialInput
+    void processInputBuffer();
+    bool handleGlobalResetCommand();
+    void processStateBasedInput();
+    void clearInputBuffer();
 };

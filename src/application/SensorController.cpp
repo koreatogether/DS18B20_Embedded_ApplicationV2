@@ -155,39 +155,11 @@ void SensorController::printSensorRow(int idx, int id, const DeviceAddress &addr
 void SensorController::updateSensorRows()
 {
     sensors.requestTemperatures();
-    int deviceCount = sensors.getDeviceCount();
     std::vector<SensorRowInfo> sensorRows;
-
-    for (int i = 0; i < SENSOR_MAX_COUNT; ++i)
-    {
-        DeviceAddress addr = {0};
-        float temp = DEVICE_DISCONNECTED_C;
-        bool connected = false;
-        if (i < deviceCount && sensors.getAddress(addr, i))
-        {
-            temp = sensors.getTempC(addr);
-            connected = true;
-        }
-        int logicalId = getSensorLogicalId(i);
-        sensorRows.push_back({i, logicalId, {0}, temp, connected});
-        for (size_t k = 0; k < sizeof(DeviceAddress); ++k)
-        {
-            sensorRows.back().addr[k] = addr[k];
-        }
-    }
-
-    // 연결된 센서만 논리 ID 기준 오름차순 정렬, 미연결 센서는 뒤로
-    std::sort(sensorRows.begin(), sensorRows.end(), [](const SensorRowInfo &a, const SensorRowInfo &b)
-              {
-        if (a.connected != b.connected) return a.connected > b.connected;
-        if (!a.connected && !b.connected) return a.idx < b.idx;
-        return a.logicalId < b.logicalId; });
-
-    // 정렬 결과를 전역 배열에 저장
-    for (int i = 0; i < SENSOR_MAX_COUNT; ++i)
-    {
-        g_sortedSensorRows[i] = sensorRows[i];
-    }
+    
+    collectSensorData(sensorRows);
+    sortSensorRows(sensorRows);
+    storeSortedResults(sensorRows);
 }
 
 void SensorController::printSensorStatusTable()
@@ -236,4 +208,58 @@ void SensorController::printSensorStatusTable()
     }
     Serial.println("센서 제어 메뉴 진입: 'menu' 또는 'm' 입력");
     Serial.println("(센서 ID/임계값/상태 관리 등은 메뉴에서 설정 가능)");
+}
+void SensorController::collectSensorData(std::vector<SensorRowInfo>& sensorRows)
+{
+    int deviceCount = sensors.getDeviceCount();
+    
+    for (int i = 0; i < SENSOR_MAX_COUNT; ++i)
+    {
+        SensorRowInfo rowInfo = createSensorRowInfo(i, deviceCount);
+        sensorRows.push_back(rowInfo);
+    }
+}
+
+SensorRowInfo SensorController::createSensorRowInfo(int idx, int deviceCount)
+{
+    DeviceAddress addr = {0};
+    float temp = DEVICE_DISCONNECTED_C;
+    bool connected = false;
+    
+    if (idx < deviceCount && sensors.getAddress(addr, idx))
+    {
+        temp = sensors.getTempC(addr);
+        connected = true;
+    }
+    
+    int logicalId = getSensorLogicalId(idx);
+    SensorRowInfo rowInfo = {idx, logicalId, {0}, temp, connected};
+    
+    // Copy address
+    for (size_t k = 0; k < sizeof(DeviceAddress); ++k)
+    {
+        rowInfo.addr[k] = addr[k];
+    }
+    
+    return rowInfo;
+}
+
+void SensorController::sortSensorRows(std::vector<SensorRowInfo>& sensorRows)
+{
+    // 연결된 센서만 논리 ID 기준 오름차순 정렬, 미연결 센서는 뒤로
+    std::sort(sensorRows.begin(), sensorRows.end(), [](const SensorRowInfo &a, const SensorRowInfo &b)
+    {
+        if (a.connected != b.connected) return a.connected > b.connected;
+        if (!a.connected && !b.connected) return a.idx < b.idx;
+        return a.logicalId < b.logicalId;
+    });
+}
+
+void SensorController::storeSortedResults(const std::vector<SensorRowInfo>& sensorRows)
+{
+    // 정렬 결과를 전역 배열에 저장
+    for (int i = 0; i < SENSOR_MAX_COUNT; ++i)
+    {
+        g_sortedSensorRows[i] = sensorRows[i];
+    }
 }

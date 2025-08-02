@@ -40,4 +40,10 @@ private:
     static SensorRowInfo g_sortedSensorRows[SENSOR_MAX_COUNT];
     void printSensorAddress(const DeviceAddress &addr);
     void printSensorRow(int idx, int id, const DeviceAddress &addr, float temp);
+    
+    // Helper methods for updateSensorRows
+    void collectSensorData(std::vector<SensorRowInfo>& sensorRows);
+    SensorRowInfo createSensorRowInfo(int idx, int deviceCount);
+    void sortSensorRows(std::vector<SensorRowInfo>& sensorRows);
+    void storeSortedResults(const std::vector<SensorRowInfo>& sensorRows);
 };
