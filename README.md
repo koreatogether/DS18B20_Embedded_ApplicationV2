@@ -84,8 +84,6 @@ lib_deps =
 # PlatformIO
 pio run --target upload
 
-# Arduino IDE
-# 보드: Arduino Uno R4 WiFi 선택 후 업로드
 ```
 
 ## 🎮 사용 예시
