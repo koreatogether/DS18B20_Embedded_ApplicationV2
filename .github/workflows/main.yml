@@ -34,6 +34,11 @@ jobs:
           mkdir -p test/logs
           pio test -e native -v 2>&1 | tee test/logs/test_results_clean.txt
 
+      - name: Run time acceleration tests with log
+        run: |
+          mkdir -p test/logs
+          pio test -e test -v 2>&1 | tee test/logs/time_acceleration_results.txt
+
       - name: Show firmware size
         run: pio run -e uno_r4_wifi --target size
 
