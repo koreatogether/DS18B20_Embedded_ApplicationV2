@@ -13,6 +13,7 @@ SensorController::SensorController()
 {
     // 생성자에서는 기본 초기화만 수행
     // EEPROM 초기화는 setup()에서 명시적으로 호출
+    measurementInterval = DEFAULT_MEASUREMENT_INTERVAL;
 }
 
 uint8_t SensorController::getSensorLogicalId(int idx)
@@ -27,16 +28,30 @@ uint8_t SensorController::getSensorLogicalId(int idx)
 
 void SensorController::setSensorLogicalId(int idx, uint8_t newId)
 {
-    sensors.setUserDataByIndex(idx, newId);
-    delay(30); // EEPROM write 여유 대기
-    int verify = sensors.getUserDataByIndex(idx);
-    Serial.print("[진단] setSensorLogicalId idx:");
-    Serial.print(idx);
-    Serial.print(" userData(변경후):");
-    Serial.print(verify);
-    Serial.print(" (기대값:");
-    Serial.print(newId);
-    Serial.println(")");
+    // EEPROM 수명 보호: 값이 변경된 경우에만 쓰기
+    uint8_t currentId = sensors.getUserDataByIndex(idx);
+    
+    if (currentId != newId) {
+        sensors.setUserDataByIndex(idx, newId);
+        delay(30); // EEPROM write 여유 대기
+        
+        int verify = sensors.getUserDataByIndex(idx);
+        Serial.print("[진단] setSensorLogicalId idx:");
+        Serial.print(idx);
+        Serial.print(" userData(변경: ");
+        Serial.print(currentId);
+        Serial.print(" → ");
+        Serial.print(verify);
+        Serial.print(", 기대값:");
+        Serial.print(newId);
+        Serial.println(")");
+    } else {
+        Serial.print("[진단] setSensorLogicalId idx:");
+        Serial.print(idx);
+        Serial.print(" userData 변경 없음 (현재값: ");
+        Serial.print(currentId);
+        Serial.println(")");
+    }
 }
 
 bool SensorController::isIdDuplicated(int newId, int exceptIdx)
@@ -91,12 +106,11 @@ void SensorController::resetAllSensorIds()
     {
         uint8_t currentId = getSensorLogicalId(i);
         
-        // 현재 ID가 있는 센서만 초기화
+        // 현재 ID가 있는 센서만 초기화 (EEPROM 수명 보호)
         if (currentId >= 1 && currentId <= SENSOR_MAX_COUNT)
         {
-            // ID를 0으로 설정하여 미할당 상태로 만듦
-            sensors.setUserDataByIndex(i, 0);
-            delay(30); // EEPROM write 여유 대기
+            // ID를 0으로 설정하여 미할당 상태로 만듦 (setSensorLogicalId 사용으로 중복 쓰기 방지)
+            setSensorLogicalId(i, 0);
             
             Serial.print("센서 ");
             Serial.print(i + 1);
@@ -387,6 +401,9 @@ void SensorController::initializeThresholds()
     }
     
     Serial.println(" 완료");
+    
+    // 측정 주기도 함께 초기화
+    initializeMeasurementInterval();
 }
 
 void SensorController::loadSensorThresholds(int sensorIdx)
@@ -585,4 +602,145 @@ const char *SensorController::getSensorStatus(int sensorIdx, float temp)
     }
     
     return "정상";
+}
+
+// ========== 측정 주기 관리 메서드들 ==========
+
+void SensorController::initializeMeasurementInterval()
+{
+    Serial.print("EEPROM 측정 주기 로드 중");
+    
+    // 기본값으로 초기화
+    measurementInterval = DEFAULT_MEASUREMENT_INTERVAL;
+    
+    // EEPROM에서 로드 시도
+    loadMeasurementInterval();
+    
+    Serial.print(".");
+    Serial.println(" 완료");
+    
+    Serial.print("현재 측정 주기: ");
+    Serial.println(formatInterval(measurementInterval));
+}
+
+void SensorController::loadMeasurementInterval()
+{
+    unsigned long storedInterval;
+    EEPROM.get(EEPROM_INTERVAL_ADDR, storedInterval);
+    
+    // 유효성 검사
+    if (isValidMeasurementInterval(storedInterval)) {
+        measurementInterval = storedInterval;
+    } else {
+        // 유효하지 않은 값이면 기본값 사용 및 저장
+        measurementInterval = DEFAULT_MEASUREMENT_INTERVAL;
+        saveMeasurementInterval();
+    }
+}
+
+void SensorController::saveMeasurementInterval()
+{
+    // 값이 변경된 경우에만 EEPROM 쓰기 (수명 연장)
+    unsigned long currentInterval;
+    EEPROM.get(EEPROM_INTERVAL_ADDR, currentInterval);
+    
+    if (currentInterval != measurementInterval) {
+        EEPROM.put(EEPROM_INTERVAL_ADDR, measurementInterval);
+        Serial.print("💾 EEPROM 저장 - 측정 주기: ");
+        Serial.println(formatInterval(measurementInterval));
+    }
+}
+
+unsigned long SensorController::getMeasurementInterval()
+{
+    return measurementInterval;
+}
+
+void SensorController::setMeasurementInterval(unsigned long intervalMs)
+{
+    if (!isValidMeasurementInterval(intervalMs)) {
+        Serial.println("❌ 오류: 측정 주기 범위를 벗어났습니다");
+        return;
+    }
+    
+    measurementInterval = intervalMs;
+    saveMeasurementInterval();
+    
+    Serial.print("✅ 측정 주기 설정 완료: ");
+    Serial.println(formatInterval(measurementInterval));
+}
+
+bool SensorController::isValidMeasurementInterval(unsigned long intervalMs)
+{
+    return (intervalMs >= MIN_MEASUREMENT_INTERVAL && intervalMs <= MAX_MEASUREMENT_INTERVAL);
+}
+
+String SensorController::formatInterval(unsigned long intervalMs)
+{
+    String result = "";
+    
+    // 밀리초를 초로 변환
+    unsigned long totalSeconds = intervalMs / 1000;
+    
+    if (totalSeconds >= 86400) { // 1일 이상
+        unsigned long days = totalSeconds / 86400;
+        unsigned long remainingSeconds = totalSeconds % 86400;
+        result += String(days) + "일";
+        
+        if (remainingSeconds >= 3600) { // 1시간 이상
+            unsigned long hours = remainingSeconds / 3600;
+            remainingSeconds %= 3600;
+            result += " " + String(hours) + "시간";
+            
+            if (remainingSeconds >= 60) { // 1분 이상
+                unsigned long minutes = remainingSeconds / 60;
+                remainingSeconds %= 60;
+                result += " " + String(minutes) + "분";
+                
+                if (remainingSeconds > 0) {
+                    result += " " + String(remainingSeconds) + "초";
+                }
+            } else if (remainingSeconds > 0) {
+                result += " " + String(remainingSeconds) + "초";
+            }
+        } else if (remainingSeconds >= 60) { // 1분 이상
+            unsigned long minutes = remainingSeconds / 60;
+            remainingSeconds %= 60;
+            result += " " + String(minutes) + "분";
+            
+            if (remainingSeconds > 0) {
+                result += " " + String(remainingSeconds) + "초";
+            }
+        } else if (remainingSeconds > 0) {
+            result += " " + String(remainingSeconds) + "초";
+        }
+    } else if (totalSeconds >= 3600) { // 1시간 이상
+        unsigned long hours = totalSeconds / 3600;
+        unsigned long remainingSeconds = totalSeconds % 3600;
+        result += String(hours) + "시간";
+        
+        if (remainingSeconds >= 60) { // 1분 이상
+            unsigned long minutes = remainingSeconds / 60;
+            remainingSeconds %= 60;
+            result += " " + String(minutes) + "분";
+            
+            if (remainingSeconds > 0) {
+                result += " " + String(remainingSeconds) + "초";
+            }
+        } else if (remainingSeconds > 0) {
+            result += " " + String(remainingSeconds) + "초";
+        }
+    } else if (totalSeconds >= 60) { // 1분 이상
+        unsigned long minutes = totalSeconds / 60;
+        unsigned long remainingSeconds = totalSeconds % 60;
+        result += String(minutes) + "분";
+        
+        if (remainingSeconds > 0) {
+            result += " " + String(remainingSeconds) + "초";
+        }
+    } else { // 1분 미만
+        result += String(totalSeconds) + "초";
+    }
+    
+    return result;
 }

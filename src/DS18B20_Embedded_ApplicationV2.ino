@@ -8,7 +8,6 @@ constexpr uint8_t ONE_WIRE_BUS = 2;
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 unsigned long lastPrint = 0;
-const unsigned long printInterval = 15000;
 
 // 컨트롤러 인스턴스
 SensorController sensorController;
@@ -79,7 +78,7 @@ void handleNormalState(unsigned long now)
         lastPrint = now;
         firstLoop = false;
     }
-    else if (now - lastPrint >= printInterval)
+    else if (now - lastPrint >= sensorController.getMeasurementInterval())
     {
         sensorController.printSensorStatusTable();
         lastPrint = now;

@@ -23,6 +23,8 @@ enum class AppState
     ThresholdChange_ConfirmMultipleSensors,
     ThresholdChange_InputMultipleUpper,
     ThresholdChange_InputMultipleLower,
+    MeasurementIntervalMenu,
+    MeasurementInterval_Input,
 };
 
 class MenuController
@@ -35,6 +37,7 @@ public:
     void printMenu();
     void printSensorIdMenu();
     void printThresholdMenu();
+    void printMeasurementIntervalMenu();
     void handleSerialInput();
 
     AppState getAppState() const { return appState; }
@@ -80,6 +83,13 @@ private:
     void handleThresholdConfirmMultipleSensorsState();
     void handleThresholdInputMultipleUpperState();
     void handleThresholdInputMultipleLowerState();
+    
+    // 측정 주기 설정 관련 메서드
+    void handleMeasurementIntervalMenuState();
+    void handleMeasurementIntervalInputState();
+    
+    // 측정 주기 입력 파싱 헬퍼 메서드
+    unsigned long parseIntervalInput(const String& input);
     
     // Helper methods for handleSensorIdSelectState
     bool validateSensorInput();

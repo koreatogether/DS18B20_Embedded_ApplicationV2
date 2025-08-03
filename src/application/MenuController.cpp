@@ -34,7 +34,8 @@ void MenuController::printMenu()
     Serial.println("===== 센서 제어 메뉴 =====");
     Serial.println("1. 센서 ID 조정");
     Serial.println("2. 상/하한 온도 조정");
-    Serial.println("3. 취소 / 상태창으로 돌아가기");
+    Serial.println("3. 센서 측정 주기 조정");
+    Serial.println("4. 취소 / 상태창으로 돌아가기");
     Serial.print("메뉴 번호를 입력하세요: ");
 }
 
@@ -97,6 +98,12 @@ void MenuController::handleMenuState()
     }
     else if (inputBuffer == "3")
     {
+        appState = AppState::MeasurementIntervalMenu;
+        Serial.println("[DEBUG] appState -> MeasurementIntervalMenu");
+        printMeasurementIntervalMenu();
+    }
+    else if (inputBuffer == "4")
+    {
         appState = AppState::Normal;
         Serial.println("[DEBUG] appState -> Normal");
         sensorController.printSensorStatusTable();
@@ -104,7 +111,7 @@ void MenuController::handleMenuState()
     }
     else
     {
-        Serial.println("지원하지 않는 메뉴입니다. 1~3 중 선택하세요.");
+        Serial.println("지원하지 않는 메뉴입니다. 1~4 중 선택하세요.");
         printMenu();
     }
 }
@@ -542,6 +549,12 @@ void MenuController::processStateBasedInput()
         break;
     case AppState::ThresholdChange_InputMultipleLower:
         handleThresholdInputMultipleLowerState();
+        break;
+    case AppState::MeasurementIntervalMenu:
+        handleMeasurementIntervalMenuState();
+        break;
+    case AppState::MeasurementInterval_Input:
+        handleMeasurementIntervalInputState();
         break;
     default:
         // 알 수 없는 상태인 경우 강제로 Normal 상태로 리셋
@@ -1087,4 +1100,164 @@ void MenuController::handleThresholdInputMultipleLowerState()
     appState = AppState::ThresholdMenu;
     Serial.println("[DEBUG] appState -> ThresholdMenu");
     printThresholdMenu();
+}
+
+// ========== Measurement Interval Menu Methods ==========
+
+void MenuController::printMeasurementIntervalMenu()
+{
+    Serial.println();
+    Serial.println("===== 센서 측정 주기 조정 메뉴 =====");
+    Serial.print("현재 측정 주기: ");
+    Serial.println(sensorController.formatInterval(sensorController.getMeasurementInterval()));
+    Serial.println();
+    Serial.println("설정 가능 범위: 10초 ~ 30일 (1초 단위)");
+    Serial.println("입력 형식 예시:");
+    Serial.println("  - 초 단위: 30, 30s (30초)");
+    Serial.println("  - 분 단위: 5m, 5M (5분)");
+    Serial.println("  - 시간 단위: 2h, 2H (2시간)");
+    Serial.println("  - 일 단위: 1d, 1D (1일)");
+    Serial.println("  - 복합 단위: 1d2h30m (1일 2시간 30분)");
+    Serial.println("  - 복합 단위: 2h30m45s (2시간 30분 45초)");
+    Serial.println("※ 대소문자 구분 없음");
+    Serial.println();
+    Serial.print("새로운 측정 주기를 입력하세요 (취소:c): ");
+}
+
+void MenuController::handleMeasurementIntervalMenuState()
+{
+    appState = AppState::MeasurementInterval_Input;
+    Serial.println("[DEBUG] appState -> MeasurementInterval_Input");
+    printMeasurementIntervalMenu();
+}
+
+void MenuController::handleMeasurementIntervalInputState()
+{
+    if (inputBuffer == "c" || inputBuffer == "C")
+    {
+        appState = AppState::Menu;
+        Serial.println("[DEBUG] appState -> Menu");
+        printMenu();
+        return;
+    }
+    
+    // 입력값 파싱
+    unsigned long intervalMs = parseIntervalInput(inputBuffer);
+    
+    if (intervalMs == 0) {
+        Serial.println("❌ 오류: 유효하지 않은 입력 형식입니다.");
+        Serial.println("예시: 30 (30초), 5m (5분), 2h (2시간), 1d (1일)");
+        Serial.println("복합: 1d2h30m (1일 2시간 30분), 2h30m45s (2시간 30분 45초)");
+        Serial.print("새로운 측정 주기를 입력하세요 (취소:c): ");
+        return;
+    }
+    
+    if (!sensorController.isValidMeasurementInterval(intervalMs)) {
+        Serial.println("❌ 오류: 측정 주기 범위를 벗어났습니다 (10초 ~ 30일)");
+        Serial.print("새로운 측정 주기를 입력하세요 (취소:c): ");
+        return;
+    }
+    
+    // 측정 주기 설정
+    sensorController.setMeasurementInterval(intervalMs);
+    
+    Serial.println();
+    Serial.println("📊 측정 주기 변경 사항:");
+    Serial.print("  새로운 주기: ");
+    Serial.println(sensorController.formatInterval(intervalMs));
+    Serial.println("  다음 센서 상태 업데이트부터 새로운 주기가 적용됩니다.");
+    
+    // 메인 메뉴로 복귀
+    appState = AppState::Menu;
+    Serial.println("[DEBUG] appState -> Menu");
+    printMenu();
+}
+
+unsigned long MenuController::parseIntervalInput(const String& input)
+{
+    String trimmedInput = input;
+    trimmedInput.trim();
+    trimmedInput.toLowerCase(); // 대소문자 구분 없이 처리
+    
+    if (trimmedInput.length() == 0) {
+        return 0; // 빈 입력
+    }
+    
+    // 복합 단위 지원 (예: "1d2h30m", "2h30m", "30m45s")
+    unsigned long totalMs = 0;
+    String currentNumber = "";
+    
+    for (int i = 0; i < trimmedInput.length(); i++) {
+        char c = trimmedInput.charAt(i);
+        
+        if (isDigit(c)) {
+            currentNumber += c;
+        } else if (c == 'd' || c == 'h' || c == 'm' || c == 's') {
+            if (currentNumber.length() == 0) {
+                return 0; // 숫자 없이 단위만 있음
+            }
+            
+            long number = currentNumber.toInt();
+            if (number <= 0) {
+                return 0; // 유효하지 않은 숫자
+            }
+            
+            unsigned long multiplier = 1000; // 기본값: 초
+            if (c == 'd') {
+                multiplier = 24 * 60 * 60 * 1000; // 일
+            } else if (c == 'h') {
+                multiplier = 60 * 60 * 1000; // 시간
+            } else if (c == 'm') {
+                multiplier = 60 * 1000; // 분
+            } else if (c == 's') {
+                multiplier = 1000; // 초
+            }
+            
+            // 오버플로우 체크
+            if (number > (MAX_MEASUREMENT_INTERVAL / multiplier)) {
+                return 0; // 너무 큰 값
+            }
+            
+            unsigned long partMs = (unsigned long)number * multiplier;
+            
+            // 총합 오버플로우 체크
+            if (totalMs > MAX_MEASUREMENT_INTERVAL - partMs) {
+                return 0; // 총합이 너무 큼
+            }
+            
+            totalMs += partMs;
+            currentNumber = "";
+        } else {
+            return 0; // 유효하지 않은 문자
+        }
+    }
+    
+    // 마지막에 숫자만 있고 단위가 없는 경우 (초로 처리)
+    if (currentNumber.length() > 0) {
+        long number = currentNumber.toInt();
+        if (number <= 0) {
+            return 0; // 유효하지 않은 숫자
+        }
+        
+        // 오버플로우 체크
+        if (number > (MAX_MEASUREMENT_INTERVAL / 1000)) {
+            return 0; // 너무 큰 값
+        }
+        
+        unsigned long partMs = (unsigned long)number * 1000; // 초
+        
+        // 총합 오버플로우 체크
+        if (totalMs > MAX_MEASUREMENT_INTERVAL - partMs) {
+            return 0; // 총합이 너무 큼
+        }
+        
+        totalMs += partMs;
+    }
+    
+    // 최소값 체크
+    if (totalMs < MIN_MEASUREMENT_INTERVAL) {
+        return 0; // 너무 작은 값
+    }
+    
+    return totalMs;
 }

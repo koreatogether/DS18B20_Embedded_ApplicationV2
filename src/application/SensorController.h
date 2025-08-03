@@ -14,9 +14,15 @@ constexpr float DS18B20_MAX_TEMP = 125.0f;
 constexpr float DEFAULT_UPPER_THRESHOLD = 30.0f;
 constexpr float DEFAULT_LOWER_THRESHOLD = 20.0f;
 
+// 측정 주기 관련 상수
+constexpr unsigned long MIN_MEASUREMENT_INTERVAL = 10000;      // 10초 (밀리초)
+constexpr unsigned long MAX_MEASUREMENT_INTERVAL = 2592000000; // 30일 (밀리초)
+constexpr unsigned long DEFAULT_MEASUREMENT_INTERVAL = 15000;  // 15초 (밀리초)
+
 // EEPROM 주소 할당
 constexpr int EEPROM_BASE_ADDR = 0;
 constexpr int EEPROM_SIZE_PER_SENSOR = 8; // float(4) + float(4) = 8 bytes
+constexpr int EEPROM_INTERVAL_ADDR = 64;  // 측정 주기 저장 주소 (unsigned long 4 bytes)
 
 struct SensorThresholds {
     float upperThreshold = DEFAULT_UPPER_THRESHOLD;  // TH (상한)
@@ -53,6 +59,13 @@ public:
     bool isValidTemperature(float temp);
     void resetSensorThresholds(int sensorIdx); // 개별 센서 임계값 초기화
     void resetAllThresholds(); // 모든 센서 임계값 초기화
+    
+    // 측정 주기 관리
+    void initializeMeasurementInterval(); // EEPROM에서 측정 주기 로드
+    unsigned long getMeasurementInterval(); // 현재 측정 주기 조회
+    void setMeasurementInterval(unsigned long intervalMs); // 측정 주기 설정
+    bool isValidMeasurementInterval(unsigned long intervalMs); // 측정 주기 유효성 검증
+    String formatInterval(unsigned long intervalMs); // 측정 주기를 읽기 쉬운 형태로 변환
 
     // 센서 상태 테이블 관리
     void printSensorStatusTable();
@@ -72,6 +85,7 @@ public:
 private:
     static SensorRowInfo g_sortedSensorRows[SENSOR_MAX_COUNT];
     SensorThresholds sensorThresholds[SENSOR_MAX_COUNT]; // 센서별 임계값 저장
+    unsigned long measurementInterval; // 현재 측정 주기 (밀리초)
     
     void printSensorAddress(const DeviceAddress &addr);
     void printSensorRow(int idx, int id, const DeviceAddress &addr, float temp);
@@ -81,6 +95,10 @@ private:
     void saveSensorThresholds(int sensorIdx);
     void saveSensorThresholds(int sensorIdx, bool verbose);
     int getEEPROMAddress(int sensorIdx);
+    
+    // 측정 주기 EEPROM 관련 메서드
+    void loadMeasurementInterval();
+    void saveMeasurementInterval();
     
     // Helper methods for updateSensorRows
     void collectSensorData(std::vector<SensorRowInfo>& sensorRows);
