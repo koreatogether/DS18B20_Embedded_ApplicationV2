@@ -22,7 +22,7 @@ uint8_t SensorController::getSensorLogicalId(int idx)
     int id = sensors.getUserDataByIndex(idx);
     if (id < 1 || id > SENSOR_MAX_COUNT)
     {
-        return idx + 1;
+        return 0; // ID가 설정되지 않은 센서는 0 반환 (미할당 상태)
     }
     return id;
 }
@@ -118,7 +118,12 @@ void SensorController::printSensorRow(int idx, int id, const DeviceAddress &addr
     }
     else
     {
-        if (idValid)
+        if (logicalId == 0)
+        {
+            Serial.print("미할당");
+            Serial.print(" | ");
+        }
+        else if (idValid)
         {
             Serial.print(logicalId);
             Serial.print("   | ");
@@ -246,7 +251,7 @@ SensorRowInfo SensorController::createSensorRowInfo(int idx, int deviceCount)
 
 void SensorController::sortSensorRows(std::vector<SensorRowInfo>& sensorRows)
 {
-    // 연결된 센서만 논리 ID 기준 오름차순 정렬, 미연결 센서는 뒤로
+    // ID 할당된 센서 → ID 미할당 센서 → 미연결 센서 순으로 정렬
     std::sort(sensorRows.begin(), sensorRows.end(), [](const SensorRowInfo &a, const SensorRowInfo &b)
     {
         // 연결 상태가 다르면 연결된 센서를 앞으로
@@ -259,8 +264,22 @@ void SensorController::sortSensorRows(std::vector<SensorRowInfo>& sensorRows)
             return a.idx < b.idx;
         }
         
-        // 둘 다 연결되어 있으면 논리 ID 순으로 정렬
-        return a.logicalId < b.logicalId;
+        // 둘 다 연결된 경우: ID 할당 상태에 따라 분류
+        bool aHasId = (a.logicalId >= 1 && a.logicalId <= SENSOR_MAX_COUNT);
+        bool bHasId = (b.logicalId >= 1 && b.logicalId <= SENSOR_MAX_COUNT);
+        
+        // ID 할당 상태가 다르면 ID가 있는 센서를 앞으로
+        if (aHasId != bHasId) {
+            return aHasId > bHasId;
+        }
+        
+        // 둘 다 ID가 할당된 경우: 논리 ID 순으로 정렬
+        if (aHasId && bHasId) {
+            return a.logicalId < b.logicalId;
+        }
+        
+        // 둘 다 ID가 미할당인 경우: 인덱스 순으로 정렬
+        return a.idx < b.idx;
     });
 }
 
