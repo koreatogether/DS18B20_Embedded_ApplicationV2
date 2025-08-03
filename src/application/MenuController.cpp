@@ -1,17 +1,20 @@
+#include <Arduino.h>
+#include <cstring>
+#include <cctype>
+#include <vector>
+#include <algorithm>
 #include "MenuController.h"
 #include "SensorController.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <vector>
-#include <algorithm>
 
 extern SensorController sensorController;
 extern unsigned long lastPrint;
 extern const unsigned long printInterval;
 
-MenuController::MenuController() 
-    : appState(AppState::Normal), 
-      selectedSensorIdx(-1), 
+MenuController::MenuController()
+    : appState(AppState::Normal),
+      selectedSensorIdx(-1),
       selectedDisplayIdx(-1),
       inputBuffer(""),
       isMultiSelectMode(false)
@@ -48,7 +51,8 @@ void MenuController::printSensorIdMenu()
 void MenuController::handleSerialInput()
 {
     // InputHandler를 사용하여 복잡도 감소
-    if (inputHandler.processSerialInput(inputBuffer)) {
+    if (inputHandler.processSerialInput(inputBuffer))
+    {
         processInputBuffer();
     }
 }
@@ -67,13 +71,13 @@ void MenuController::resetToNormalState()
 
 void MenuController::handleNormalState()
 {
-    if (inputBuffer == "menu" || inputBuffer == "m")
+    if (inputBuffer == "menu" || inputBuffer == "MENU" || inputBuffer == "m" || inputBuffer == "M")
     {
         appState = AppState::Menu;
         Serial.println("[DEBUG] appState -> Menu");
         printMenu();
     }
-    else if (inputBuffer == "reset" || inputBuffer == "r")
+    else if (inputBuffer == "reset" || inputBuffer == "RESET" || inputBuffer == "r" || inputBuffer == "R")
     {
         // 강제 리셋 명령어 추가
         resetToNormalState();
@@ -98,8 +102,8 @@ void MenuController::handleMenuState()
     }
     else if (inputBuffer == "3")
     {
-        appState = AppState::MeasurementIntervalMenu;
-        Serial.println("[DEBUG] appState -> MeasurementIntervalMenu");
+        appState = AppState::MeasurementInterval_Input;
+        Serial.println("[DEBUG] appState -> MeasurementInterval_Input");
         printMeasurementIntervalMenu();
     }
     else if (inputBuffer == "4")
@@ -206,7 +210,7 @@ bool MenuController::validateSensorInput()
     return true;
 }
 
-bool MenuController::processSensorIndices(const std::vector<int>& indices)
+bool MenuController::processSensorIndices(const std::vector<int> &indices)
 {
     if (indices.empty())
     {
@@ -366,8 +370,9 @@ bool MenuController::processNewSensorId(int newId)
 
 void MenuController::moveToNextSensor()
 {
-    selectedDisplayIdx = selectedSensorIndices[std::distance(selectedSensorIndices.begin(), 
-        std::find(selectedSensorIndices.begin(), selectedSensorIndices.end(), selectedDisplayIdx)) + 1];
+    selectedDisplayIdx = selectedSensorIndices[std::distance(selectedSensorIndices.begin(),
+                                                             std::find(selectedSensorIndices.begin(), selectedSensorIndices.end(), selectedDisplayIdx)) +
+                                               1];
     const auto *sortedRows = sensorController.getSortedSensorRows();
     selectedSensorIdx = sortedRows[selectedDisplayIdx - 1].idx;
     appState = AppState::SensorIdChange_ConfirmSensor;
@@ -489,7 +494,7 @@ void MenuController::processInputBuffer()
 
 bool MenuController::handleGlobalResetCommand()
 {
-    if (inputBuffer == "reset" || inputBuffer == "RESET")
+    if (inputBuffer == "reset" || inputBuffer == "RESET" || inputBuffer == "Reset")
     {
         Serial.println("[INFO] 강제 리셋 명령어 수신");
         resetToNormalState();
@@ -569,31 +574,33 @@ void MenuController::processStateBasedInput()
 void MenuController::clearInputBuffer()
 {
     inputBuffer = "";
-    
+
     // 안전한 버퍼 클리어를 위한 제한값들
-    const int MAX_CLEAR_CHARS = 64;  // 더 보수적으로 설정
+    const int MAX_CLEAR_CHARS = 64;            // 더 보수적으로 설정
     const unsigned long MAX_CLEAR_TIME_MS = 5; // 최대 클리어 시간 제한
-    
+
     unsigned long startTime = millis();
     int clearCount = 0;
     int consecutiveFailures = 0;
     const int MAX_CONSECUTIVE_FAILURES = 3;
-    
+
     // 입력 처리 후 Serial 버퍼 완전 비우기 (테스트 자동화 환경 대응)
-    while (clearCount < MAX_CLEAR_CHARS && 
+    while (clearCount < MAX_CLEAR_CHARS &&
            (millis() - startTime) < MAX_CLEAR_TIME_MS &&
            consecutiveFailures < MAX_CONSECUTIVE_FAILURES)
     {
-        if (!Serial.available()) {
+        if (!Serial.available())
+        {
             break; // 더 이상 읽을 데이터 없음
         }
-        
+
         int readResult = Serial.read();
-        if (readResult == -1) {
+        if (readResult == -1)
+        {
             consecutiveFailures++;
             continue; // 읽기 실패 시 재시도
         }
-        
+
         consecutiveFailures = 0; // 성공적인 읽기 후 실패 카운터 리셋
         clearCount++;
     }
@@ -605,10 +612,10 @@ void MenuController::handleSensorIdConfirmResetState()
     {
         // 전체 ID 초기화 실행
         sensorController.resetAllSensorIds();
-        
+
         // 센서 상태 테이블 출력
         sensorController.printSensorStatusTable();
-        
+
         // 센서 ID 메뉴로 복귀
         appState = AppState::SensorIdMenu;
         Serial.println("[DEBUG] appState -> SensorIdMenu");
@@ -705,19 +712,19 @@ void MenuController::handleThresholdSelectSensorState()
         printThresholdMenu();
         return;
     }
-    
+
     int sensorNum = inputBuffer.toInt();
     if (sensorNum >= 1 && sensorNum <= 8)
     {
         selectedSensorIdx = sensorNum - 1; // 0-based 인덱스로 변환
-        
+
         // 현재 임계값 로드
         tempUpperThreshold = sensorController.getUpperThreshold(selectedSensorIdx);
         tempLowerThreshold = sensorController.getLowerThreshold(selectedSensorIdx);
-        
+
         appState = AppState::ThresholdChange_InputUpper;
         Serial.println("[DEBUG] appState -> ThresholdChange_InputUpper");
-        
+
         Serial.println();
         Serial.print("📊 센서 ");
         Serial.print(sensorNum);
@@ -749,7 +756,7 @@ void MenuController::handleThresholdInputUpperState()
         printThresholdMenu();
         return;
     }
-    
+
     // 빈 입력 (엔터만) - 기존값 유지
     if (inputBuffer.length() == 0)
     {
@@ -769,7 +776,7 @@ void MenuController::handleThresholdInputUpperState()
             Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
             return;
         }
-        
+
         // 범위 검증
         if (!sensorController.isValidTemperature(newUpper))
         {
@@ -779,13 +786,13 @@ void MenuController::handleThresholdInputUpperState()
             Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
             return;
         }
-        
+
         tempUpperThreshold = newUpper;
         Serial.print("상한값 설정: ");
         Serial.print(tempUpperThreshold, 1);
         Serial.println("°C");
     }
-    
+
     // 하한값 입력으로 이동
     appState = AppState::ThresholdChange_InputLower;
     Serial.println("[DEBUG] appState -> ThresholdChange_InputLower");
@@ -803,7 +810,7 @@ void MenuController::handleThresholdInputLowerState()
         printThresholdMenu();
         return;
     }
-    
+
     // 빈 입력 (엔터만) - 기존값 유지
     if (inputBuffer.length() == 0)
     {
@@ -823,7 +830,7 @@ void MenuController::handleThresholdInputLowerState()
             Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
             return;
         }
-        
+
         // 범위 검증
         if (!sensorController.isValidTemperature(newLower))
         {
@@ -833,13 +840,13 @@ void MenuController::handleThresholdInputLowerState()
             Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
             return;
         }
-        
+
         tempLowerThreshold = newLower;
         Serial.print("하한값 설정: ");
         Serial.print(tempLowerThreshold, 1);
         Serial.println("°C");
     }
-    
+
     // 논리 검증: 상한값이 하한값보다 커야 함
     if (tempUpperThreshold <= tempLowerThreshold)
     {
@@ -854,14 +861,14 @@ void MenuController::handleThresholdInputLowerState()
         Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
         return;
     }
-    
+
     // 임계값 설정 완료
     sensorController.setThresholds(selectedSensorIdx, tempUpperThreshold, tempLowerThreshold);
-    
+
     // 결과 확인을 위해 센서 상태 테이블 출력
     Serial.println();
     sensorController.printSensorStatusTable();
-    
+
     // 임계값 메뉴로 복귀
     appState = AppState::ThresholdMenu;
     Serial.println("[DEBUG] appState -> ThresholdMenu");
@@ -879,29 +886,33 @@ void MenuController::handleThresholdSelectMultipleSensorsState()
         printThresholdMenu();
         return;
     }
-    
+
     // 센서 번호 파싱 및 검증
-    if (!validateSensorInput()) {
+    if (!validateSensorInput())
+    {
         Serial.print("임계값을 설정할 센서 번호들을 입력하세요 (예: 1 2 3 5, 취소:c): ");
         return;
     }
-    
+
     std::vector<int> indices = parseSensorIndices(inputBuffer);
-    if (!processSensorIndices(indices)) {
+    if (!processSensorIndices(indices))
+    {
         Serial.print("임계값을 설정할 센서 번호들을 입력하세요 (예: 1 2 3 5, 취소:c): ");
         return;
     }
-    
+
     // 선택된 센서들 확인
     selectedSensorIndices = indices;
     appState = AppState::ThresholdChange_ConfirmMultipleSensors;
     Serial.println("[DEBUG] appState -> ThresholdChange_ConfirmMultipleSensors");
-    
+
     Serial.println();
     Serial.print("선택된 센서: ");
-    for (size_t i = 0; i < selectedSensorIndices.size(); i++) {
+    for (size_t i = 0; i < selectedSensorIndices.size(); i++)
+    {
         Serial.print(selectedSensorIndices[i]);
-        if (i < selectedSensorIndices.size() - 1) {
+        if (i < selectedSensorIndices.size() - 1)
+        {
             Serial.print(", ");
         }
     }
@@ -918,17 +929,17 @@ void MenuController::handleThresholdConfirmMultipleSensorsState()
         printThresholdMenu();
         return;
     }
-    
+
     if (inputBuffer == "y" || inputBuffer == "Y")
     {
         // 기본값으로 임시 임계값 설정 (첫 번째 센서의 현재값 사용)
         int firstSensorIdx = selectedSensorIndices[0] - 1;
         tempUpperThreshold = sensorController.getUpperThreshold(firstSensorIdx);
         tempLowerThreshold = sensorController.getLowerThreshold(firstSensorIdx);
-        
+
         appState = AppState::ThresholdChange_InputMultipleUpper;
         Serial.println("[DEBUG] appState -> ThresholdChange_InputMultipleUpper");
-        
+
         Serial.println();
         Serial.print("📊 복수 센서 임계값 설정 (");
         Serial.print(selectedSensorIndices.size());
@@ -959,7 +970,7 @@ void MenuController::handleThresholdInputMultipleUpperState()
         printThresholdMenu();
         return;
     }
-    
+
     // 빈 입력 (엔터만) - 기존값 유지
     if (inputBuffer.length() == 0)
     {
@@ -979,7 +990,7 @@ void MenuController::handleThresholdInputMultipleUpperState()
             Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
             return;
         }
-        
+
         // 범위 검증
         if (!sensorController.isValidTemperature(newUpper))
         {
@@ -989,13 +1000,13 @@ void MenuController::handleThresholdInputMultipleUpperState()
             Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
             return;
         }
-        
+
         tempUpperThreshold = newUpper;
         Serial.print("상한값 설정: ");
         Serial.print(tempUpperThreshold, 1);
         Serial.println("°C");
     }
-    
+
     // 하한값 입력으로 이동
     appState = AppState::ThresholdChange_InputMultipleLower;
     Serial.println("[DEBUG] appState -> ThresholdChange_InputMultipleLower");
@@ -1013,7 +1024,7 @@ void MenuController::handleThresholdInputMultipleLowerState()
         printThresholdMenu();
         return;
     }
-    
+
     // 빈 입력 (엔터만) - 기존값 유지
     if (inputBuffer.length() == 0)
     {
@@ -1033,7 +1044,7 @@ void MenuController::handleThresholdInputMultipleLowerState()
             Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
             return;
         }
-        
+
         // 범위 검증
         if (!sensorController.isValidTemperature(newLower))
         {
@@ -1043,13 +1054,13 @@ void MenuController::handleThresholdInputMultipleLowerState()
             Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
             return;
         }
-        
+
         tempLowerThreshold = newLower;
         Serial.print("하한값 설정: ");
         Serial.print(tempLowerThreshold, 1);
         Serial.println("°C");
     }
-    
+
     // 논리 검증: 상한값이 하한값보다 커야 함
     if (tempUpperThreshold <= tempLowerThreshold)
     {
@@ -1064,16 +1075,17 @@ void MenuController::handleThresholdInputMultipleLowerState()
         Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
         return;
     }
-    
+
     // 선택된 모든 센서에 임계값 설정
     Serial.println();
     Serial.println("🔄 복수 센서 임계값 설정 중...");
-    
-    for (int sensorNum : selectedSensorIndices) {
+
+    for (int sensorNum : selectedSensorIndices)
+    {
         int sensorIdx = sensorNum - 1; // 0-based 인덱스로 변환
         sensorController.setThresholds(sensorIdx, tempUpperThreshold, tempLowerThreshold);
     }
-    
+
     Serial.println();
     Serial.print("✅ ");
     Serial.print(selectedSensorIndices.size());
@@ -1082,20 +1094,22 @@ void MenuController::handleThresholdInputMultipleLowerState()
     Serial.print("°C, TL=");
     Serial.print(tempLowerThreshold, 1);
     Serial.println("°C");
-    
+
     Serial.print("설정된 센서: ");
-    for (size_t i = 0; i < selectedSensorIndices.size(); i++) {
+    for (size_t i = 0; i < selectedSensorIndices.size(); i++)
+    {
         Serial.print(selectedSensorIndices[i]);
-        if (i < selectedSensorIndices.size() - 1) {
+        if (i < selectedSensorIndices.size() - 1)
+        {
             Serial.print(", ");
         }
     }
     Serial.println();
-    
+
     // 결과 확인을 위해 센서 상태 테이블 출력
     Serial.println();
     sensorController.printSensorStatusTable();
-    
+
     // 임계값 메뉴로 복귀
     appState = AppState::ThresholdMenu;
     Serial.println("[DEBUG] appState -> ThresholdMenu");
@@ -1128,7 +1142,6 @@ void MenuController::handleMeasurementIntervalMenuState()
 {
     appState = AppState::MeasurementInterval_Input;
     Serial.println("[DEBUG] appState -> MeasurementInterval_Input");
-    printMeasurementIntervalMenu();
 }
 
 void MenuController::handleMeasurementIntervalInputState()
@@ -1140,124 +1153,149 @@ void MenuController::handleMeasurementIntervalInputState()
         printMenu();
         return;
     }
-    
+
     // 입력값 파싱
     unsigned long intervalMs = parseIntervalInput(inputBuffer);
-    
-    if (intervalMs == 0) {
+
+    if (intervalMs == 0)
+    {
         Serial.println("❌ 오류: 유효하지 않은 입력 형식입니다.");
         Serial.println("예시: 30 (30초), 5m (5분), 2h (2시간), 1d (1일)");
         Serial.println("복합: 1d2h30m (1일 2시간 30분), 2h30m45s (2시간 30분 45초)");
         Serial.print("새로운 측정 주기를 입력하세요 (취소:c): ");
         return;
     }
-    
-    if (!sensorController.isValidMeasurementInterval(intervalMs)) {
+
+    if (!sensorController.isValidMeasurementInterval(intervalMs))
+    {
         Serial.println("❌ 오류: 측정 주기 범위를 벗어났습니다 (10초 ~ 30일)");
         Serial.print("새로운 측정 주기를 입력하세요 (취소:c): ");
         return;
     }
-    
+
     // 측정 주기 설정
     sensorController.setMeasurementInterval(intervalMs);
-    
+
     Serial.println();
     Serial.println("📊 측정 주기 변경 사항:");
     Serial.print("  새로운 주기: ");
     Serial.println(sensorController.formatInterval(intervalMs));
     Serial.println("  다음 센서 상태 업데이트부터 새로운 주기가 적용됩니다.");
-    
+
     // 메인 메뉴로 복귀
     appState = AppState::Menu;
     Serial.println("[DEBUG] appState -> Menu");
     printMenu();
 }
 
-unsigned long MenuController::parseIntervalInput(const String& input)
+unsigned long MenuController::parseIntervalInput(const String &input)
 {
     String trimmedInput = input;
     trimmedInput.trim();
     trimmedInput.toLowerCase(); // 대소문자 구분 없이 처리
-    
-    if (trimmedInput.length() == 0) {
+
+    if (trimmedInput.length() == 0)
+    {
         return 0; // 빈 입력
     }
-    
+
     // 복합 단위 지원 (예: "1d2h30m", "2h30m", "30m45s")
     unsigned long totalMs = 0;
     String currentNumber = "";
-    
-    for (int i = 0; i < trimmedInput.length(); i++) {
+
+    for (int i = 0; i < trimmedInput.length(); i++)
+    {
         char c = trimmedInput.charAt(i);
-        
-        if (isDigit(c)) {
+
+        if (isDigit(c))
+        {
             currentNumber += c;
-        } else if (c == 'd' || c == 'h' || c == 'm' || c == 's') {
-            if (currentNumber.length() == 0) {
+        }
+        else if (c == 'd' || c == 'h' || c == 'm' || c == 's')
+        {
+            if (currentNumber.length() == 0)
+            {
                 return 0; // 숫자 없이 단위만 있음
             }
-            
+
             long number = currentNumber.toInt();
-            if (number <= 0) {
+            if (number <= 0)
+            {
                 return 0; // 유효하지 않은 숫자
             }
-            
+
             unsigned long multiplier = 1000; // 기본값: 초
-            if (c == 'd') {
+            if (c == 'd')
+            {
                 multiplier = 24 * 60 * 60 * 1000; // 일
-            } else if (c == 'h') {
+            }
+            else if (c == 'h')
+            {
                 multiplier = 60 * 60 * 1000; // 시간
-            } else if (c == 'm') {
+            }
+            else if (c == 'm')
+            {
                 multiplier = 60 * 1000; // 분
-            } else if (c == 's') {
+            }
+            else if (c == 's')
+            {
                 multiplier = 1000; // 초
             }
-            
+
             // 오버플로우 체크
-            if (number > (MAX_MEASUREMENT_INTERVAL / multiplier)) {
+            if (number > (MAX_MEASUREMENT_INTERVAL / multiplier))
+            {
                 return 0; // 너무 큰 값
             }
-            
+
             unsigned long partMs = (unsigned long)number * multiplier;
-            
+
             // 총합 오버플로우 체크
-            if (totalMs > MAX_MEASUREMENT_INTERVAL - partMs) {
+            if (totalMs > MAX_MEASUREMENT_INTERVAL - partMs)
+            {
                 return 0; // 총합이 너무 큼
             }
-            
+
             totalMs += partMs;
             currentNumber = "";
-        } else {
+        }
+        else
+        {
             return 0; // 유효하지 않은 문자
         }
     }
-    
+
     // 마지막에 숫자만 있고 단위가 없는 경우 (초로 처리)
-    if (currentNumber.length() > 0) {
+    if (currentNumber.length() > 0)
+    {
         long number = currentNumber.toInt();
-        if (number <= 0) {
+        if (number <= 0)
+        {
             return 0; // 유효하지 않은 숫자
         }
-        
+
         // 오버플로우 체크
-        if (number > (MAX_MEASUREMENT_INTERVAL / 1000)) {
+        if (number > (MAX_MEASUREMENT_INTERVAL / 1000))
+        {
             return 0; // 너무 큰 값
         }
-        
+
         unsigned long partMs = (unsigned long)number * 1000; // 초
-        
+
         // 총합 오버플로우 체크
-        if (totalMs > MAX_MEASUREMENT_INTERVAL - partMs) {
+        if (totalMs > MAX_MEASUREMENT_INTERVAL - partMs)
+        {
             return 0; // 총합이 너무 큼
         }
-        
+
         totalMs += partMs;
     }
-    
+
     // 최소값 체크
-    if (totalMs < MIN_MEASUREMENT_INTERVAL) {
+    if (totalMs < MIN_MEASUREMENT_INTERVAL)
+    {
         return 0; // 너무 작은 값
     }
-    
+
     return totalMs;
 }

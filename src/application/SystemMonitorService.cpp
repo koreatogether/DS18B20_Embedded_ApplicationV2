@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "SystemMonitorService.h"
 
 SystemMonitorService::SystemMonitorService(IMemoryManager *memMgr, ILogger *log)
