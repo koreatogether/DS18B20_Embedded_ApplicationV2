@@ -15,6 +15,14 @@ enum class AppState
     SensorIdChange_ConfirmId,
     SensorIdChange_Apply,
     SensorIdChange_ConfirmReset,
+    ThresholdMenu,
+    ThresholdChange_SelectSensor,
+    ThresholdChange_InputUpper,
+    ThresholdChange_InputLower,
+    ThresholdChange_SelectMultipleSensors,
+    ThresholdChange_ConfirmMultipleSensors,
+    ThresholdChange_InputMultipleUpper,
+    ThresholdChange_InputMultipleLower,
 };
 
 class MenuController
@@ -26,6 +34,7 @@ public:
 
     void printMenu();
     void printSensorIdMenu();
+    void printThresholdMenu();
     void handleSerialInput();
 
     AppState getAppState() const { return appState; }
@@ -47,6 +56,10 @@ private:
     // 헬퍼 클래스들
     InputHandler inputHandler;
     SensorMenuHandler sensorMenuHandler;
+    
+    // 임계값 설정용 임시 변수들
+    float tempUpperThreshold;
+    float tempLowerThreshold;
 
     void handleNormalState();
     void handleMenuState();
@@ -55,6 +68,18 @@ private:
     void handleSensorIdConfirmState();
     void handleSensorIdInputState();
     void handleSensorIdConfirmResetState();
+    
+    // 임계값 설정 관련 메서드
+    void handleThresholdMenuState();
+    void handleThresholdSelectSensorState();
+    void handleThresholdInputUpperState();
+    void handleThresholdInputLowerState();
+    
+    // 복수 센서 임계값 설정 관련 메서드
+    void handleThresholdSelectMultipleSensorsState();
+    void handleThresholdConfirmMultipleSensorsState();
+    void handleThresholdInputMultipleUpperState();
+    void handleThresholdInputMultipleLowerState();
     
     // Helper methods for handleSensorIdSelectState
     bool validateSensorInput();

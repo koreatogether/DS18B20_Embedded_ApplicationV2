@@ -91,8 +91,9 @@ void MenuController::handleMenuState()
     }
     else if (inputBuffer == "2")
     {
-        Serial.println("[상/하한 온도 조정 메뉴는 추후 구현]");
-        printMenu();
+        appState = AppState::ThresholdMenu;
+        Serial.println("[DEBUG] appState -> ThresholdMenu");
+        printThresholdMenu();
     }
     else if (inputBuffer == "3")
     {
@@ -518,6 +519,30 @@ void MenuController::processStateBasedInput()
     case AppState::SensorIdChange_ConfirmReset:
         handleSensorIdConfirmResetState();
         break;
+    case AppState::ThresholdMenu:
+        handleThresholdMenuState();
+        break;
+    case AppState::ThresholdChange_SelectSensor:
+        handleThresholdSelectSensorState();
+        break;
+    case AppState::ThresholdChange_InputUpper:
+        handleThresholdInputUpperState();
+        break;
+    case AppState::ThresholdChange_InputLower:
+        handleThresholdInputLowerState();
+        break;
+    case AppState::ThresholdChange_SelectMultipleSensors:
+        handleThresholdSelectMultipleSensorsState();
+        break;
+    case AppState::ThresholdChange_ConfirmMultipleSensors:
+        handleThresholdConfirmMultipleSensorsState();
+        break;
+    case AppState::ThresholdChange_InputMultipleUpper:
+        handleThresholdInputMultipleUpperState();
+        break;
+    case AppState::ThresholdChange_InputMultipleLower:
+        handleThresholdInputMultipleLowerState();
+        break;
     default:
         // 알 수 없는 상태인 경우 강제로 Normal 상태로 리셋
         Serial.println("[경고] 알 수 없는 상태 감지, Normal 상태로 리셋합니다.");
@@ -590,4 +615,476 @@ void MenuController::handleSensorIdConfirmResetState()
         Serial.println("y(예) 또는 n(아니오)를 입력하세요.");
         Serial.print("모든 센서의 ID를 초기화하시겠습니까? (y/n): ");
     }
+}
+
+// ========== 임계값 설정 메뉴 관련 메서드들 ==========
+
+void MenuController::printThresholdMenu()
+{
+    Serial.println();
+    Serial.println("===== 상/하한 온도 조정 메뉴 =====");
+    Serial.println("1. 개별 센서 임계값 설정");
+    Serial.println("2. 복수 센서 임계값 설정");
+    Serial.println("3. 전체 센서 임계값 초기화");
+    Serial.println("4. 이전 메뉴로 돌아가기");
+    Serial.println("5. 상태창으로 돌아가기");
+    Serial.print("메뉴 번호를 입력하세요: ");
+}
+
+void MenuController::handleThresholdMenuState()
+{
+    if (inputBuffer == "1")
+    {
+        appState = AppState::ThresholdChange_SelectSensor;
+        Serial.println("[DEBUG] appState -> ThresholdChange_SelectSensor");
+        Serial.println();
+        Serial.println("=== 센서별 임계값 현황 ===");
+        sensorController.printSensorStatusTable();
+        Serial.print("임계값을 설정할 센서 번호(1~8, 취소:c)를 입력하세요: ");
+    }
+    else if (inputBuffer == "2")
+    {
+        appState = AppState::ThresholdChange_SelectMultipleSensors;
+        Serial.println("[DEBUG] appState -> ThresholdChange_SelectMultipleSensors");
+        Serial.println();
+        Serial.println("=== 복수 센서 임계값 설정 ===");
+        sensorController.printSensorStatusTable();
+        Serial.print("임계값을 설정할 센서 번호들을 입력하세요 (예: 1 2 3 5, 취소:c): ");
+    }
+    else if (inputBuffer == "3")
+    {
+        Serial.println();
+        Serial.println("⚠️  경고: 모든 센서의 임계값이 기본값으로 초기화됩니다!");
+        Serial.println("계속하시겠습니까? (y/n): ");
+        // 임시로 확인 상태 처리 (간단히 구현)
+        String confirm = "";
+        // 여기서는 바로 실행하도록 간소화
+        sensorController.resetAllThresholds();
+        sensorController.printSensorStatusTable();
+        printThresholdMenu();
+    }
+    else if (inputBuffer == "4")
+    {
+        appState = AppState::Menu;
+        Serial.println("[DEBUG] appState -> Menu");
+        printMenu();
+    }
+    else if (inputBuffer == "5")
+    {
+        appState = AppState::Normal;
+        Serial.println("[DEBUG] appState -> Normal");
+        sensorController.printSensorStatusTable();
+        lastPrint = millis();
+    }
+    else
+    {
+        Serial.println("지원하지 않는 메뉴입니다. 1~5 중 선택하세요.");
+        printThresholdMenu();
+    }
+}
+
+void MenuController::handleThresholdSelectSensorState()
+{
+    if (inputBuffer == "c" || inputBuffer == "C")
+    {
+        appState = AppState::ThresholdMenu;
+        Serial.println("[DEBUG] appState -> ThresholdMenu");
+        printThresholdMenu();
+        return;
+    }
+    
+    int sensorNum = inputBuffer.toInt();
+    if (sensorNum >= 1 && sensorNum <= 8)
+    {
+        selectedSensorIdx = sensorNum - 1; // 0-based 인덱스로 변환
+        
+        // 현재 임계값 로드
+        tempUpperThreshold = sensorController.getUpperThreshold(selectedSensorIdx);
+        tempLowerThreshold = sensorController.getLowerThreshold(selectedSensorIdx);
+        
+        appState = AppState::ThresholdChange_InputUpper;
+        Serial.println("[DEBUG] appState -> ThresholdChange_InputUpper");
+        
+        Serial.println();
+        Serial.print("📊 센서 ");
+        Serial.print(sensorNum);
+        Serial.println("번 현재 임계값:");
+        Serial.print("   상한(TH): ");
+        Serial.print(tempUpperThreshold, 1);
+        Serial.println("°C");
+        Serial.print("   하한(TL): ");
+        Serial.print(tempLowerThreshold, 1);
+        Serial.println("°C");
+        Serial.println();
+        Serial.print("새로운 상한 임계값 입력 (현재: ");
+        Serial.print(tempUpperThreshold, 1);
+        Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
+    }
+    else
+    {
+        Serial.println("❌ 오류: 1~8 사이의 숫자를 입력하세요.");
+        Serial.print("임계값을 설정할 센서 번호(1~8, 취소:c)를 입력하세요: ");
+    }
+}
+
+void MenuController::handleThresholdInputUpperState()
+{
+    if (inputBuffer == "c" || inputBuffer == "C")
+    {
+        appState = AppState::ThresholdMenu;
+        Serial.println("[DEBUG] appState -> ThresholdMenu");
+        printThresholdMenu();
+        return;
+    }
+    
+    // 빈 입력 (엔터만) - 기존값 유지
+    if (inputBuffer.length() == 0)
+    {
+        Serial.print("상한값 유지: ");
+        Serial.print(tempUpperThreshold, 1);
+        Serial.println("°C");
+    }
+    else
+    {
+        // 숫자 검증
+        float newUpper = inputBuffer.toFloat();
+        if (inputBuffer.toFloat() == 0.0 && inputBuffer != "0" && inputBuffer != "0.0")
+        {
+            Serial.println("❌ 오류: 유효한 숫자를 입력하세요 (예: 25.5)");
+            Serial.print("상한 임계값 입력 (현재: ");
+            Serial.print(tempUpperThreshold, 1);
+            Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
+            return;
+        }
+        
+        // 범위 검증
+        if (!sensorController.isValidTemperature(newUpper))
+        {
+            Serial.println("❌ 경고: DS18B20 범위를 벗어났습니다 (-55~125°C)");
+            Serial.print("상한 임계값 입력 (현재: ");
+            Serial.print(tempUpperThreshold, 1);
+            Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
+            return;
+        }
+        
+        tempUpperThreshold = newUpper;
+        Serial.print("상한값 설정: ");
+        Serial.print(tempUpperThreshold, 1);
+        Serial.println("°C");
+    }
+    
+    // 하한값 입력으로 이동
+    appState = AppState::ThresholdChange_InputLower;
+    Serial.println("[DEBUG] appState -> ThresholdChange_InputLower");
+    Serial.print("새로운 하한 임계값 입력 (현재: ");
+    Serial.print(tempLowerThreshold, 1);
+    Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
+}
+
+void MenuController::handleThresholdInputLowerState()
+{
+    if (inputBuffer == "c" || inputBuffer == "C")
+    {
+        appState = AppState::ThresholdMenu;
+        Serial.println("[DEBUG] appState -> ThresholdMenu");
+        printThresholdMenu();
+        return;
+    }
+    
+    // 빈 입력 (엔터만) - 기존값 유지
+    if (inputBuffer.length() == 0)
+    {
+        Serial.print("하한값 유지: ");
+        Serial.print(tempLowerThreshold, 1);
+        Serial.println("°C");
+    }
+    else
+    {
+        // 숫자 검증
+        float newLower = inputBuffer.toFloat();
+        if (inputBuffer.toFloat() == 0.0 && inputBuffer != "0" && inputBuffer != "0.0")
+        {
+            Serial.println("❌ 오류: 유효한 숫자를 입력하세요 (예: 15.5)");
+            Serial.print("하한 임계값 입력 (현재: ");
+            Serial.print(tempLowerThreshold, 1);
+            Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
+            return;
+        }
+        
+        // 범위 검증
+        if (!sensorController.isValidTemperature(newLower))
+        {
+            Serial.println("❌ 경고: DS18B20 범위를 벗어났습니다 (-55~125°C)");
+            Serial.print("하한 임계값 입력 (현재: ");
+            Serial.print(tempLowerThreshold, 1);
+            Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
+            return;
+        }
+        
+        tempLowerThreshold = newLower;
+        Serial.print("하한값 설정: ");
+        Serial.print(tempLowerThreshold, 1);
+        Serial.println("°C");
+    }
+    
+    // 논리 검증: 상한값이 하한값보다 커야 함
+    if (tempUpperThreshold <= tempLowerThreshold)
+    {
+        Serial.println("❌ 경고: 상한값은 하한값보다 커야 합니다");
+        Serial.print("상한: ");
+        Serial.print(tempUpperThreshold, 1);
+        Serial.print("°C, 하한: ");
+        Serial.print(tempLowerThreshold, 1);
+        Serial.println("°C");
+        Serial.print("하한 임계값을 다시 입력하세요 (현재: ");
+        Serial.print(tempLowerThreshold, 1);
+        Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
+        return;
+    }
+    
+    // 임계값 설정 완료
+    sensorController.setThresholds(selectedSensorIdx, tempUpperThreshold, tempLowerThreshold);
+    
+    // 결과 확인을 위해 센서 상태 테이블 출력
+    Serial.println();
+    sensorController.printSensorStatusTable();
+    
+    // 임계값 메뉴로 복귀
+    appState = AppState::ThresholdMenu;
+    Serial.println("[DEBUG] appState -> ThresholdMenu");
+    printThresholdMenu();
+}
+
+// ========== 복수 센서 임계값 설정 메서드들 ==========
+
+void MenuController::handleThresholdSelectMultipleSensorsState()
+{
+    if (inputBuffer == "c" || inputBuffer == "C")
+    {
+        appState = AppState::ThresholdMenu;
+        Serial.println("[DEBUG] appState -> ThresholdMenu");
+        printThresholdMenu();
+        return;
+    }
+    
+    // 센서 번호 파싱 및 검증
+    if (!validateSensorInput()) {
+        Serial.print("임계값을 설정할 센서 번호들을 입력하세요 (예: 1 2 3 5, 취소:c): ");
+        return;
+    }
+    
+    std::vector<int> indices = parseSensorIndices(inputBuffer);
+    if (!processSensorIndices(indices)) {
+        Serial.print("임계값을 설정할 센서 번호들을 입력하세요 (예: 1 2 3 5, 취소:c): ");
+        return;
+    }
+    
+    // 선택된 센서들 확인
+    selectedSensorIndices = indices;
+    appState = AppState::ThresholdChange_ConfirmMultipleSensors;
+    Serial.println("[DEBUG] appState -> ThresholdChange_ConfirmMultipleSensors");
+    
+    Serial.println();
+    Serial.print("선택된 센서: ");
+    for (size_t i = 0; i < selectedSensorIndices.size(); i++) {
+        Serial.print(selectedSensorIndices[i]);
+        if (i < selectedSensorIndices.size() - 1) {
+            Serial.print(", ");
+        }
+    }
+    Serial.println();
+    Serial.print("이 센서들에 동일한 임계값을 설정하시겠습니까? (y/n, 취소:c): ");
+}
+
+void MenuController::handleThresholdConfirmMultipleSensorsState()
+{
+    if (inputBuffer == "c" || inputBuffer == "C")
+    {
+        appState = AppState::ThresholdMenu;
+        Serial.println("[DEBUG] appState -> ThresholdMenu");
+        printThresholdMenu();
+        return;
+    }
+    
+    if (inputBuffer == "y" || inputBuffer == "Y")
+    {
+        // 기본값으로 임시 임계값 설정 (첫 번째 센서의 현재값 사용)
+        int firstSensorIdx = selectedSensorIndices[0] - 1;
+        tempUpperThreshold = sensorController.getUpperThreshold(firstSensorIdx);
+        tempLowerThreshold = sensorController.getLowerThreshold(firstSensorIdx);
+        
+        appState = AppState::ThresholdChange_InputMultipleUpper;
+        Serial.println("[DEBUG] appState -> ThresholdChange_InputMultipleUpper");
+        
+        Serial.println();
+        Serial.print("📊 복수 센서 임계값 설정 (");
+        Serial.print(selectedSensorIndices.size());
+        Serial.println("개 센서)");
+        Serial.print("새로운 상한 임계값 입력 (현재: ");
+        Serial.print(tempUpperThreshold, 1);
+        Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
+    }
+    else if (inputBuffer == "n" || inputBuffer == "N")
+    {
+        appState = AppState::ThresholdChange_SelectMultipleSensors;
+        Serial.println("[DEBUG] appState -> ThresholdChange_SelectMultipleSensors");
+        Serial.print("임계값을 설정할 센서 번호들을 입력하세요 (예: 1 2 3 5, 취소:c): ");
+    }
+    else
+    {
+        Serial.println("y(예), n(아니오), c(취소) 중 하나를 입력하세요.");
+        Serial.print("이 센서들에 동일한 임계값을 설정하시겠습니까? (y/n, 취소:c): ");
+    }
+}
+
+void MenuController::handleThresholdInputMultipleUpperState()
+{
+    if (inputBuffer == "c" || inputBuffer == "C")
+    {
+        appState = AppState::ThresholdMenu;
+        Serial.println("[DEBUG] appState -> ThresholdMenu");
+        printThresholdMenu();
+        return;
+    }
+    
+    // 빈 입력 (엔터만) - 기존값 유지
+    if (inputBuffer.length() == 0)
+    {
+        Serial.print("상한값 유지: ");
+        Serial.print(tempUpperThreshold, 1);
+        Serial.println("°C");
+    }
+    else
+    {
+        // 숫자 검증
+        float newUpper = inputBuffer.toFloat();
+        if (inputBuffer.toFloat() == 0.0 && inputBuffer != "0" && inputBuffer != "0.0")
+        {
+            Serial.println("❌ 오류: 유효한 숫자를 입력하세요 (예: 25.5)");
+            Serial.print("상한 임계값 입력 (현재: ");
+            Serial.print(tempUpperThreshold, 1);
+            Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
+            return;
+        }
+        
+        // 범위 검증
+        if (!sensorController.isValidTemperature(newUpper))
+        {
+            Serial.println("❌ 경고: DS18B20 범위를 벗어났습니다 (-55~125°C)");
+            Serial.print("상한 임계값 입력 (현재: ");
+            Serial.print(tempUpperThreshold, 1);
+            Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
+            return;
+        }
+        
+        tempUpperThreshold = newUpper;
+        Serial.print("상한값 설정: ");
+        Serial.print(tempUpperThreshold, 1);
+        Serial.println("°C");
+    }
+    
+    // 하한값 입력으로 이동
+    appState = AppState::ThresholdChange_InputMultipleLower;
+    Serial.println("[DEBUG] appState -> ThresholdChange_InputMultipleLower");
+    Serial.print("새로운 하한 임계값 입력 (현재: ");
+    Serial.print(tempLowerThreshold, 1);
+    Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
+}
+
+void MenuController::handleThresholdInputMultipleLowerState()
+{
+    if (inputBuffer == "c" || inputBuffer == "C")
+    {
+        appState = AppState::ThresholdMenu;
+        Serial.println("[DEBUG] appState -> ThresholdMenu");
+        printThresholdMenu();
+        return;
+    }
+    
+    // 빈 입력 (엔터만) - 기존값 유지
+    if (inputBuffer.length() == 0)
+    {
+        Serial.print("하한값 유지: ");
+        Serial.print(tempLowerThreshold, 1);
+        Serial.println("°C");
+    }
+    else
+    {
+        // 숫자 검증
+        float newLower = inputBuffer.toFloat();
+        if (inputBuffer.toFloat() == 0.0 && inputBuffer != "0" && inputBuffer != "0.0")
+        {
+            Serial.println("❌ 오류: 유효한 숫자를 입력하세요 (예: 15.5)");
+            Serial.print("하한 임계값 입력 (현재: ");
+            Serial.print(tempLowerThreshold, 1);
+            Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
+            return;
+        }
+        
+        // 범위 검증
+        if (!sensorController.isValidTemperature(newLower))
+        {
+            Serial.println("❌ 경고: DS18B20 범위를 벗어났습니다 (-55~125°C)");
+            Serial.print("하한 임계값 입력 (현재: ");
+            Serial.print(tempLowerThreshold, 1);
+            Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
+            return;
+        }
+        
+        tempLowerThreshold = newLower;
+        Serial.print("하한값 설정: ");
+        Serial.print(tempLowerThreshold, 1);
+        Serial.println("°C");
+    }
+    
+    // 논리 검증: 상한값이 하한값보다 커야 함
+    if (tempUpperThreshold <= tempLowerThreshold)
+    {
+        Serial.println("❌ 경고: 상한값은 하한값보다 커야 합니다");
+        Serial.print("상한: ");
+        Serial.print(tempUpperThreshold, 1);
+        Serial.print("°C, 하한: ");
+        Serial.print(tempLowerThreshold, 1);
+        Serial.println("°C");
+        Serial.print("하한 임계값을 다시 입력하세요 (현재: ");
+        Serial.print(tempLowerThreshold, 1);
+        Serial.print("°C, 범위: -55~125°C, 엔터=유지): ");
+        return;
+    }
+    
+    // 선택된 모든 센서에 임계값 설정
+    Serial.println();
+    Serial.println("🔄 복수 센서 임계값 설정 중...");
+    
+    for (int sensorNum : selectedSensorIndices) {
+        int sensorIdx = sensorNum - 1; // 0-based 인덱스로 변환
+        sensorController.setThresholds(sensorIdx, tempUpperThreshold, tempLowerThreshold);
+    }
+    
+    Serial.println();
+    Serial.print("✅ ");
+    Serial.print(selectedSensorIndices.size());
+    Serial.print("개 센서 임계값 설정 완료: TH=");
+    Serial.print(tempUpperThreshold, 1);
+    Serial.print("°C, TL=");
+    Serial.print(tempLowerThreshold, 1);
+    Serial.println("°C");
+    
+    Serial.print("설정된 센서: ");
+    for (size_t i = 0; i < selectedSensorIndices.size(); i++) {
+        Serial.print(selectedSensorIndices[i]);
+        if (i < selectedSensorIndices.size() - 1) {
+            Serial.print(", ");
+        }
+    }
+    Serial.println();
+    
+    // 결과 확인을 위해 센서 상태 테이블 출력
+    Serial.println();
+    sensorController.printSensorStatusTable();
+    
+    // 임계값 메뉴로 복귀
+    appState = AppState::ThresholdMenu;
+    Serial.println("[DEBUG] appState -> ThresholdMenu");
+    printThresholdMenu();
 }

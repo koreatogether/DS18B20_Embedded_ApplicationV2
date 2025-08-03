@@ -17,17 +17,29 @@ bool firstLoop = true;
 
 void setup()
 {
+    Serial.begin(115200);
+    delay(100); // 시리얼 안정화 대기
+    
+    Serial.println();
+    Serial.println("=== DS18B20 시스템 시작 ===");
+    Serial.println("1. 시리얼 통신 초기화 완료");
+    
     setupSerialAndSensor();
+    
+    Serial.println("2. 센서 및 EEPROM 초기화 완료");
+    
     // 추가 안전장치: setup 완료 후 1초 대기하여 시리얼 통신 안정화
-    delay(1000);
+    delay(500);
     
     // 강제로 Normal 상태 확인 및 설정
     menuController.resetToNormalState();
     
+    Serial.println("3. 메뉴 컨트롤러 초기화 완료");
     Serial.println("=== 시스템 초기화 완료 ===");
     Serial.print("현재 AppState: ");
     Serial.println((int)menuController.getAppState());
     Serial.println("센서 제어 메뉴 진입: 'menu' 또는 'm' 입력");
+    Serial.println();
 }
 
 void loop()
@@ -42,18 +54,21 @@ void loop()
 
 void setupSerialAndSensor()
 {
-    Serial.begin(115200);
-    Serial.println("[시리얼 통신 시작: 115200 baud]");
     Serial.print("Firmware build: ");
     Serial.print(__DATE__);
     Serial.print(" ");
     Serial.println(__TIME__);
-    sensors.begin();
-    Serial.println("[DS18B20Sensor 초기화 완료]");
     
-    // 명시적으로 Normal 상태로 초기화 및 상태 출력
+    Serial.print("DS18B20 센서 초기화 중...");
+    sensors.begin();
+    Serial.println(" 완료");
+    
+    // EEPROM 임계값 초기화 (Serial 초기화 후에 실행)
+    sensorController.initializeThresholds();
+    
+    // 명시적으로 Normal 상태로 초기화
     menuController.setAppState(AppState::Normal);
-    Serial.println("[시스템 상태: Normal 모드로 초기화 완료]");
+    Serial.println("시스템 상태: Normal 모드");
 }
 
 void handleNormalState(unsigned long now)

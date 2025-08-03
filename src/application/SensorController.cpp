@@ -7,14 +7,12 @@
 extern OneWire oneWire;
 extern DallasTemperature sensors;
 
-constexpr float UPPER_THRESHOLD = 30.0;
-constexpr float LOWER_THRESHOLD = 20.0;
-
 SensorRowInfo SensorController::g_sortedSensorRows[SENSOR_MAX_COUNT];
 
 SensorController::SensorController()
 {
-    // 생성자에서 필요한 초기화 수행
+    // 생성자에서는 기본 초기화만 수행
+    // EEPROM 초기화는 setup()에서 명시적으로 호출
 }
 
 uint8_t SensorController::getSensorLogicalId(int idx)
@@ -128,22 +126,30 @@ void SensorController::resetAllSensorIds()
 
 const char *SensorController::getUpperState(float temp)
 {
+    // 기존 메서드는 기본 임계값 사용 (하위 호환성)
     if (temp == DEVICE_DISCONNECTED_C)
         return "-";
-    return (temp > UPPER_THRESHOLD) ? "초과" : "정상";
+    return (temp > DEFAULT_UPPER_THRESHOLD) ? "초과" : "정상";
 }
 
 const char *SensorController::getLowerState(float temp)
 {
+    // 기존 메서드는 기본 임계값 사용 (하위 호환성)
     if (temp == DEVICE_DISCONNECTED_C)
         return "-";
-    return (temp < LOWER_THRESHOLD) ? "초과" : "정상";
+    return (temp < DEFAULT_LOWER_THRESHOLD) ? "초과" : "정상";
 }
 
 const char *SensorController::getSensorStatus(float temp)
 {
+    // 기존 메서드는 기본 임계값 사용 (하위 호환성)
     if (temp == DEVICE_DISCONNECTED_C)
         return "오류";
+    
+    if (temp > DEFAULT_UPPER_THRESHOLD || temp < DEFAULT_LOWER_THRESHOLD) {
+        return "경고";
+    }
+    
     return "정상";
 }
 
@@ -196,16 +202,33 @@ void SensorController::printSensorRow(int idx, int id, const DeviceAddress &addr
             Serial.print("°C   ");
         }
         Serial.print(" | ");
-        Serial.print(UPPER_THRESHOLD, 1);
-        Serial.print("°C       | ");
-        Serial.print(getUpperState(temp));
-        Serial.print("         | ");
-        Serial.print(LOWER_THRESHOLD, 1);
-        Serial.print("°C       | ");
-        Serial.print(getLowerState(temp));
-        Serial.print("         | ");
-        Serial.print(getSensorStatus(temp));
-        Serial.print("     |");
+        // 센서별 임계값 사용 - 표시 행 번호(id-1)를 인덱스로 사용
+        int displayRowIdx = id - 1; // 표시되는 행 번호를 0-based 인덱스로 변환
+        if (logicalId >= 1 && logicalId <= SENSOR_MAX_COUNT) {
+            // ID가 할당된 센서: 표시 행 인덱스로 임계값 조회
+            Serial.print(getUpperThreshold(displayRowIdx), 1);
+            Serial.print("°C       | ");
+            Serial.print(getUpperState(displayRowIdx, temp));
+            Serial.print("         | ");
+            Serial.print(getLowerThreshold(displayRowIdx), 1);
+            Serial.print("°C       | ");
+            Serial.print(getLowerState(displayRowIdx, temp));
+            Serial.print("         | ");
+            Serial.print(getSensorStatus(displayRowIdx, temp));
+            Serial.print("     |");
+        } else {
+            // ID가 없는 센서도 표시 행 인덱스로 임계값 조회 (일관성 유지)
+            Serial.print(getUpperThreshold(displayRowIdx), 1);
+            Serial.print("°C       | ");
+            Serial.print(getUpperState(displayRowIdx, temp));
+            Serial.print("         | ");
+            Serial.print(getLowerThreshold(displayRowIdx), 1);
+            Serial.print("°C       | ");
+            Serial.print(getLowerState(displayRowIdx, temp));
+            Serial.print("         | ");
+            Serial.print(getSensorStatus(displayRowIdx, temp));
+            Serial.print("     |");
+        }
     }
     Serial.println();
 }
@@ -222,8 +245,8 @@ void SensorController::updateSensorRows()
 
 void SensorController::printSensorStatusTable()
 {
-    Serial.println("| 번호 | ID  | 센서 주소           | 현재 온도 | 상한설정온도 | 상한초과상태 | 하한설정온도 | 하한초과상태 | 센서상태 |");
-    Serial.println("| ---- | --- | ------------       | ---------  | ------------  | ------------ | ------------ | ------------ | -------- |");
+    Serial.println("| 번호 | ID  | 센서 주소           | 현재 온도 | 상한임계값   | 상한초과상태 | 하한임계값   | 하한초과상태 | 센서상태 |");
+    Serial.println("| ---- | --- | ------------       | ---------  | ------------ | ------------ | ------------ | ------------ | -------- |");
 
     updateSensorRows();
 
@@ -343,4 +366,223 @@ void SensorController::storeSortedResults(const std::vector<SensorRowInfo>& sens
     {
         g_sortedSensorRows[i] = sensorRows[i];
     }
+}
+
+// ========== 센서 임계값 관리 메서드들 ==========
+
+void SensorController::initializeThresholds()
+{
+    Serial.print("EEPROM 임계값 로드 중");
+    
+    for (int i = 0; i < SENSOR_MAX_COUNT; i++) {
+        // 안전한 초기화: 먼저 기본값으로 설정
+        sensorThresholds[i].upperThreshold = DEFAULT_UPPER_THRESHOLD;
+        sensorThresholds[i].lowerThreshold = DEFAULT_LOWER_THRESHOLD;
+        sensorThresholds[i].isCustomSet = false;
+        
+        // EEPROM에서 로드 시도
+        loadSensorThresholds(i);
+        Serial.print(".");
+        delay(5); // 각 센서 로드 후 짧은 지연
+    }
+    
+    Serial.println(" 완료");
+}
+
+void SensorController::loadSensorThresholds(int sensorIdx)
+{
+    if (sensorIdx < 0 || sensorIdx >= SENSOR_MAX_COUNT) return;
+    
+    int addr = getEEPROMAddress(sensorIdx);
+    
+    // EEPROM에서 임계값 읽기
+    EEPROM.get(addr, sensorThresholds[sensorIdx].upperThreshold);
+    EEPROM.get(addr + 4, sensorThresholds[sensorIdx].lowerThreshold);
+    
+    // 유효성 검사 (초기값 또는 손상된 데이터 처리)
+    bool needsReset = false;
+    
+    if (isnan(sensorThresholds[sensorIdx].upperThreshold) || 
+        !isValidTemperature(sensorThresholds[sensorIdx].upperThreshold)) {
+        sensorThresholds[sensorIdx].upperThreshold = DEFAULT_UPPER_THRESHOLD;
+        needsReset = true;
+    }
+    
+    if (isnan(sensorThresholds[sensorIdx].lowerThreshold) || 
+        !isValidTemperature(sensorThresholds[sensorIdx].lowerThreshold)) {
+        sensorThresholds[sensorIdx].lowerThreshold = DEFAULT_LOWER_THRESHOLD;
+        needsReset = true;
+    }
+    
+    // 논리 검증: 상한값이 하한값보다 작으면 기본값으로 리셋
+    if (sensorThresholds[sensorIdx].upperThreshold <= sensorThresholds[sensorIdx].lowerThreshold) {
+        sensorThresholds[sensorIdx].upperThreshold = DEFAULT_UPPER_THRESHOLD;
+        sensorThresholds[sensorIdx].lowerThreshold = DEFAULT_LOWER_THRESHOLD;
+        needsReset = true;
+    }
+    
+    // 손상된 데이터가 있었다면 EEPROM에 기본값 저장 (조용히)
+    if (needsReset) {
+        saveSensorThresholds(sensorIdx, false); // verbose = false
+        sensorThresholds[sensorIdx].isCustomSet = false;
+    } else {
+        sensorThresholds[sensorIdx].isCustomSet = true;
+    }
+}
+
+void SensorController::saveSensorThresholds(int sensorIdx)
+{
+    saveSensorThresholds(sensorIdx, true); // 기본적으로 출력 활성화
+}
+
+void SensorController::saveSensorThresholds(int sensorIdx, bool verbose)
+{
+    if (sensorIdx < 0 || sensorIdx >= SENSOR_MAX_COUNT) return;
+    
+    int addr = getEEPROMAddress(sensorIdx);
+    
+    // 값이 변경된 경우에만 EEPROM 쓰기 (수명 연장)
+    float currentUpper, currentLower;
+    EEPROM.get(addr, currentUpper);
+    EEPROM.get(addr + 4, currentLower);
+    
+    if (currentUpper != sensorThresholds[sensorIdx].upperThreshold) {
+        EEPROM.put(addr, sensorThresholds[sensorIdx].upperThreshold);
+    }
+    
+    if (currentLower != sensorThresholds[sensorIdx].lowerThreshold) {
+        EEPROM.put(addr + 4, sensorThresholds[sensorIdx].lowerThreshold);
+    }
+    
+    if (verbose) {
+        Serial.print("💾 EEPROM 저장 - 센서 ");
+        Serial.print(sensorIdx + 1);
+        Serial.print(": TH=");
+        Serial.print(sensorThresholds[sensorIdx].upperThreshold, 1);
+        Serial.print("°C, TL=");
+        Serial.print(sensorThresholds[sensorIdx].lowerThreshold, 1);
+        Serial.println("°C");
+    }
+}
+
+int SensorController::getEEPROMAddress(int sensorIdx)
+{
+    return EEPROM_BASE_ADDR + (sensorIdx * EEPROM_SIZE_PER_SENSOR);
+}
+
+float SensorController::getUpperThreshold(int sensorIdx)
+{
+    if (sensorIdx < 0 || sensorIdx >= SENSOR_MAX_COUNT) {
+        return DEFAULT_UPPER_THRESHOLD;
+    }
+    return sensorThresholds[sensorIdx].upperThreshold;
+}
+
+float SensorController::getLowerThreshold(int sensorIdx)
+{
+    if (sensorIdx < 0 || sensorIdx >= SENSOR_MAX_COUNT) {
+        return DEFAULT_LOWER_THRESHOLD;
+    }
+    return sensorThresholds[sensorIdx].lowerThreshold;
+}
+
+void SensorController::setThresholds(int sensorIdx, float upperTemp, float lowerTemp)
+{
+    // sensorIdx는 표시 행 번호 기반 인덱스 (0-7)
+    // 센서 논리 ID와는 무관하게 표시되는 위치로 임계값을 관리
+    if (sensorIdx < 0 || sensorIdx >= SENSOR_MAX_COUNT) {
+        Serial.println("❌ 오류: 잘못된 센서 인덱스");
+        return;
+    }
+    
+    // 입력 검증
+    if (!isValidTemperature(upperTemp) || !isValidTemperature(lowerTemp)) {
+        Serial.println("❌ 오류: 온도 범위를 벗어났습니다 (-55~125°C)");
+        return;
+    }
+    
+    if (upperTemp <= lowerTemp) {
+        Serial.println("❌ 오류: 상한값은 하한값보다 커야 합니다");
+        return;
+    }
+    
+    // 임계값 설정
+    sensorThresholds[sensorIdx].upperThreshold = upperTemp;
+    sensorThresholds[sensorIdx].lowerThreshold = lowerTemp;
+    sensorThresholds[sensorIdx].isCustomSet = true;
+    
+    // EEPROM에 저장
+    saveSensorThresholds(sensorIdx);
+    
+    Serial.print("✅ 센서 ");
+    Serial.print(sensorIdx + 1);
+    Serial.print(" 임계값 설정 완료: TH=");
+    Serial.print(upperTemp, 1);
+    Serial.print("°C, TL=");
+    Serial.print(lowerTemp, 1);
+    Serial.println("°C");
+}
+
+bool SensorController::isValidTemperature(float temp)
+{
+    return (temp >= DS18B20_MIN_TEMP && temp <= DS18B20_MAX_TEMP);
+}
+
+void SensorController::resetSensorThresholds(int sensorIdx)
+{
+    if (sensorIdx < 0 || sensorIdx >= SENSOR_MAX_COUNT) return;
+    
+    sensorThresholds[sensorIdx].upperThreshold = DEFAULT_UPPER_THRESHOLD;
+    sensorThresholds[sensorIdx].lowerThreshold = DEFAULT_LOWER_THRESHOLD;
+    sensorThresholds[sensorIdx].isCustomSet = false;
+    
+    saveSensorThresholds(sensorIdx);
+    
+    Serial.print("🔄 센서 ");
+    Serial.print(sensorIdx + 1);
+    Serial.println(" 임계값이 기본값으로 초기화되었습니다");
+}
+
+void SensorController::resetAllThresholds()
+{
+    Serial.println();
+    Serial.println("=== 전체 센서 임계값 초기화 시작 ===");
+    
+    for (int i = 0; i < SENSOR_MAX_COUNT; i++) {
+        resetSensorThresholds(i);
+    }
+    
+    Serial.println("=== 전체 센서 임계값 초기화 완료 ===");
+    Serial.println();
+}
+
+// 센서별 임계값을 사용한 상태 확인 메서드들
+const char *SensorController::getUpperState(int sensorIdx, float temp)
+{
+    if (temp == DEVICE_DISCONNECTED_C) return "-";
+    
+    float threshold = getUpperThreshold(sensorIdx);
+    return (temp > threshold) ? "초과" : "정상";
+}
+
+const char *SensorController::getLowerState(int sensorIdx, float temp)
+{
+    if (temp == DEVICE_DISCONNECTED_C) return "-";
+    
+    float threshold = getLowerThreshold(sensorIdx);
+    return (temp < threshold) ? "초과" : "정상";
+}
+
+const char *SensorController::getSensorStatus(int sensorIdx, float temp)
+{
+    if (temp == DEVICE_DISCONNECTED_C) return "오류";
+    
+    float upperThreshold = getUpperThreshold(sensorIdx);
+    float lowerThreshold = getLowerThreshold(sensorIdx);
+    
+    if (temp > upperThreshold || temp < lowerThreshold) {
+        return "경고";
+    }
+    
+    return "정상";
 }
