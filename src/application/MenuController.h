@@ -14,6 +14,7 @@ enum class AppState
     SensorIdChange_InputId,
     SensorIdChange_ConfirmId,
     SensorIdChange_Apply,
+    SensorIdChange_ConfirmReset,
 };
 
 class MenuController
@@ -53,6 +54,7 @@ private:
     void handleSensorIdSelectState();
     void handleSensorIdConfirmState();
     void handleSensorIdInputState();
+    void handleSensorIdConfirmResetState();
     
     // Helper methods for handleSensorIdSelectState
     bool validateSensorInput();

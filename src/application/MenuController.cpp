@@ -135,6 +135,15 @@ void MenuController::handleSensorIdMenuState()
         sensorController.printSensorStatusTable();
         printSensorIdMenu();
     }
+    else if (inputBuffer == "4")
+    {
+        // 전체 ID 초기화 확인
+        Serial.println();
+        Serial.println("⚠️  경고: 모든 센서의 ID가 초기화됩니다!");
+        Serial.println("계속하시겠습니까? (y/n): ");
+        appState = AppState::SensorIdChange_ConfirmReset;
+        Serial.println("[DEBUG] appState -> SensorIdChange_ConfirmReset");
+    }
     else if (inputBuffer == "5")
     {
         appState = AppState::Menu;
@@ -506,6 +515,9 @@ void MenuController::processStateBasedInput()
     case AppState::SensorIdChange_InputId:
         handleSensorIdInputState();
         break;
+    case AppState::SensorIdChange_ConfirmReset:
+        handleSensorIdConfirmResetState();
+        break;
     default:
         // 알 수 없는 상태인 경우 강제로 Normal 상태로 리셋
         Serial.println("[경고] 알 수 없는 상태 감지, Normal 상태로 리셋합니다.");
@@ -546,5 +558,36 @@ void MenuController::clearInputBuffer()
         
         consecutiveFailures = 0; // 성공적인 읽기 후 실패 카운터 리셋
         clearCount++;
+    }
+}
+
+void MenuController::handleSensorIdConfirmResetState()
+{
+    if (inputBuffer == "y" || inputBuffer == "Y")
+    {
+        // 전체 ID 초기화 실행
+        sensorController.resetAllSensorIds();
+        
+        // 센서 상태 테이블 출력
+        sensorController.printSensorStatusTable();
+        
+        // 센서 ID 메뉴로 복귀
+        appState = AppState::SensorIdMenu;
+        Serial.println("[DEBUG] appState -> SensorIdMenu");
+        printSensorIdMenu();
+    }
+    else if (inputBuffer == "n" || inputBuffer == "N")
+    {
+        // 취소 - 센서 ID 메뉴로 복귀
+        Serial.println("전체 ID 초기화가 취소되었습니다.");
+        appState = AppState::SensorIdMenu;
+        Serial.println("[DEBUG] appState -> SensorIdMenu");
+        printSensorIdMenu();
+    }
+    else
+    {
+        // 잘못된 입력
+        Serial.println("y(예) 또는 n(아니오)를 입력하세요.");
+        Serial.print("모든 센서의 ID를 초기화하시겠습니까? (y/n): ");
     }
 }

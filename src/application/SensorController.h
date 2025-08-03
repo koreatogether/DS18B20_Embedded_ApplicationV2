@@ -26,6 +26,7 @@ public:
     void setSensorLogicalId(int idx, uint8_t newId);
     bool isIdDuplicated(int newId, int exceptIdx = -1);
     void assignIDsByAddress();
+    void resetAllSensorIds(); // 전체 ID 초기화
 
     // 센서 상태 테이블 관리
     void printSensorStatusTable();

@@ -73,6 +73,59 @@ void SensorController::assignIDsByAddress()
     }
 }
 
+void SensorController::resetAllSensorIds()
+{
+    int deviceCount = sensors.getDeviceCount();
+    Serial.println();
+    Serial.println("=== 전체 센서 ID 초기화 시작 ===");
+    
+    if (deviceCount == 0) {
+        Serial.println("연결된 센서가 없습니다.");
+        return;
+    }
+    
+    Serial.print("총 ");
+    Serial.print(deviceCount);
+    Serial.println("개의 센서 ID를 초기화합니다...");
+    
+    int resetCount = 0;
+    for (int i = 0; i < deviceCount; i++)
+    {
+        uint8_t currentId = getSensorLogicalId(i);
+        
+        // 현재 ID가 있는 센서만 초기화
+        if (currentId >= 1 && currentId <= SENSOR_MAX_COUNT)
+        {
+            // ID를 0으로 설정하여 미할당 상태로 만듦
+            sensors.setUserDataByIndex(i, 0);
+            delay(30); // EEPROM write 여유 대기
+            
+            Serial.print("센서 ");
+            Serial.print(i + 1);
+            Serial.print(" (기존 ID: ");
+            Serial.print(currentId);
+            Serial.println(") → 미할당 상태로 초기화");
+            
+            resetCount++;
+        }
+        else if (currentId == 0)
+        {
+            Serial.print("센서 ");
+            Serial.print(i + 1);
+            Serial.println(" → 이미 미할당 상태 (건너뜀)");
+        }
+    }
+    
+    Serial.println();
+    Serial.print("초기화 완료: ");
+    Serial.print(resetCount);
+    Serial.print("/");
+    Serial.print(deviceCount);
+    Serial.println("개 센서 ID가 초기화되었습니다.");
+    Serial.println("=== 전체 센서 ID 초기화 완료 ===");
+    Serial.println();
+}
+
 const char *SensorController::getUpperState(float temp)
 {
     if (temp == DEVICE_DISCONNECTED_C)
