@@ -37,50 +37,30 @@ python tools/quality_metrics/code_metrics.py
 # 과거 데이터와 비교하여 트렌드 분석
 python tools/quality_metrics/trend_analyzer.py
 
-# 결과 파일 위치:
-# - logs/quality/trend_analysis_YYYYMMDD_HHMMSS.json
-# - logs/quality/trend_report_YYYYMMDD_HHMMSS.md
-```
 
 ### 자동화된 전체 품질 모니터링
-
-#### Windows (PowerShell)
-```powershell
-# 전체 프로세스 실행 (빌드 + 테스트 + 분석)
-powershell -ExecutionPolicy Bypass -File tools/quality_metrics/monitor_quality.ps1
 
 # 분석만 실행 (빌드/테스트 건너뛰기)
 powershell -ExecutionPolicy Bypass -File tools/quality_metrics/monitor_quality.ps1 -SkipBuild -SkipTest
 
 # 상세 출력 포함
-powershell -ExecutionPolicy Bypass -File tools/quality_metrics/monitor_quality.ps1 -Verbose
+## DS18B20_Embedded_ApplicationV2 Quality Metrics
 ```
 
 #### Linux/macOS (Bash)
-```bash
 # 전체 프로세스 실행
-bash tools/quality_metrics/monitor_quality.sh
 
 # Git Bash에서도 사용 가능
 ```
-
 ## 📈 품질 점수 기준
 
 ### 전체 품질 점수 (0-100)
 - **90-100**: 🎉 탁월한 품질
 - **80-89**: ✅ 좋은 품질
-- **70-79**: ⚠️ 수용 가능한 품질
-- **0-69**: 🚨 개선 필요
-
-### 점수 구성 요소
 - **아키텍처 메트릭**: 30% (계층 분리, 의존성 역전, 인터페이스 사용)
 - **테스트 메트릭**: 25% (테스트 성공률, 커버리지)
 - **빌드 메트릭**: 20% (컴파일 성공, 메모리 사용률)
-- **코드 메트릭**: 15% (복잡도, 파일 크기)
-- **문서화**: 10% (문서 파일 수)
-
 ## 📋 생성되는 리포트
-
 ### 1. 품질 메트릭 리포트 예시
 ```markdown
 # DS18B20 Embedded Application - Code Quality Report

@@ -1,6 +1,8 @@
 #pragma once
 #include <Arduino.h>
 #include <vector>
+#include "InputHandler.h"
+#include "SensorMenuHandler.h"
 
 enum class AppState
 {
@@ -40,6 +42,10 @@ private:
     int selectedSensorIdx;
     int selectedDisplayIdx;
     bool isMultiSelectMode = false;
+    
+    // 헬퍼 클래스들
+    InputHandler inputHandler;
+    SensorMenuHandler sensorMenuHandler;
 
     void handleNormalState();
     void handleMenuState();

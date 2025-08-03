@@ -20,26 +20,10 @@ MenuController::MenuController()
     selectedSensorIndices.clear(); // 명시적으로 비우기 (선택사항)
 }
 
-// 입력 문자열에서 1~8 사이의 숫자만 추출, 중복 제거
+// SensorMenuHandler를 사용하여 복잡도 감소 (static 함수)
 std::vector<int> MenuController::parseSensorIndices(const String &input)
 {
-    std::vector<int> indices;
-    bool used[9] = {false}; // 1~8만 사용
-    int len = input.length();
-    for (int i = 0; i < len; ++i)
-    {
-        char c = input.charAt(i);
-        if (c >= '1' && c <= '8')
-        {
-            int idx = c - '0';
-            if (!used[idx])
-            {
-                indices.push_back(idx);
-                used[idx] = true;
-            }
-        }
-    }
-    return indices;
+    return SensorMenuHandler::parseSensorIndices(input);
 }
 
 #include "MenuController.h"
@@ -56,89 +40,15 @@ void MenuController::printMenu()
 
 void MenuController::printSensorIdMenu()
 {
-    Serial.println();
-    Serial.println("--- 센서 ID 조정 메뉴 ---");
-    Serial.println("1. 개별 센서 ID 변경");
-    Serial.println("2. 복수의 센서 ID 변경");
-    Serial.println("3. 주소순 자동 ID 할당");
-    Serial.println("4. 전체 ID 초기화");
-    Serial.println("5. 이전 메뉴 이동");
-    Serial.println("6. 상태창으로 돌아가기");
-    Serial.print("메뉴 번호를 입력하세요: ");
-}
-
-// 안전한 Serial 읽기를 위한 헬퍼 함수 (MenuController용)
-static bool safeMenuSerialRead(char& outChar, int& attempts) {
-    const int MAX_READ_ATTEMPTS = 3;
-    
-    if (attempts >= MAX_READ_ATTEMPTS) {
-        return false; // 최대 시도 횟수 초과
-    }
-    
-    if (!Serial.available()) {
-        return false; // 데이터 없음
-    }
-    
-    int readResult = Serial.read();
-    attempts++;
-    
-    if (readResult == -1) {
-        return false; // 읽기 실패
-    }
-    
-    // 유효한 ASCII 범위 검증 (보안 강화)
-    if (readResult < 0 || readResult > 127) {
-        return false; // 유효하지 않은 문자
-    }
-    
-    outChar = static_cast<char>(readResult);
-    return true;
+    // SensorMenuHandler를 사용하여 복잡도 감소
+    sensorMenuHandler.printSensorIdMenu();
 }
 
 void MenuController::handleSerialInput()
 {
-    // 안전한 입력 처리를 위한 제한값들
-    const int MAX_CHARS_PER_CALL = 32;  // 더 보수적으로 설정
-    const int MAX_INPUT_LENGTH = 16;    // 입력 길이 제한
-    const unsigned long MAX_PROCESSING_TIME_MS = 10; // 최대 처리 시간 제한
-    
-    unsigned long startTime = millis();
-    int charCount = 0;
-    int readAttempts = 0;
-    
-    while (charCount < MAX_CHARS_PER_CALL && 
-           (millis() - startTime) < MAX_PROCESSING_TIME_MS)
-    {
-        char c;
-        if (!safeMenuSerialRead(c, readAttempts)) {
-            break; // 안전한 읽기 실패 시 종료
-        }
-        
-        charCount++;
-        readAttempts = 0; // 성공적인 읽기 후 시도 횟수 리셋
-        
-        if (c == '\r' || c == '\n')
-        {
-            if (inputBuffer.length() > 0)
-            {
-                processInputBuffer();
-            }
-        }
-        else if (isprint(c) && !isspace(c)) // 출력 가능한 비공백 문자만 허용
-        {
-            // 더 엄격한 버퍼 오버플로우 방지
-            if (inputBuffer.length() < MAX_INPUT_LENGTH)
-            {
-                inputBuffer += c;
-            }
-            else
-            {
-                // 입력 길이 초과 시 경고 및 버퍼 클리어
-                Serial.println("Warning: Input too long, cleared.");
-                inputBuffer = "";
-                break;
-            }
-        }
+    // InputHandler를 사용하여 복잡도 감소
+    if (inputHandler.processSerialInput(inputBuffer)) {
+        processInputBuffer();
     }
 }
 
