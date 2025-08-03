@@ -67,19 +67,55 @@ void MenuController::printSensorIdMenu()
     Serial.print("메뉴 번호를 입력하세요: ");
 }
 
+// 안전한 Serial 읽기를 위한 헬퍼 함수 (MenuController용)
+static bool safeMenuSerialRead(char& outChar, int& attempts) {
+    const int MAX_READ_ATTEMPTS = 3;
+    
+    if (attempts >= MAX_READ_ATTEMPTS) {
+        return false; // 최대 시도 횟수 초과
+    }
+    
+    if (!Serial.available()) {
+        return false; // 데이터 없음
+    }
+    
+    int readResult = Serial.read();
+    attempts++;
+    
+    if (readResult == -1) {
+        return false; // 읽기 실패
+    }
+    
+    // 유효한 ASCII 범위 검증 (보안 강화)
+    if (readResult < 0 || readResult > 127) {
+        return false; // 유효하지 않은 문자
+    }
+    
+    outChar = static_cast<char>(readResult);
+    return true;
+}
+
 void MenuController::handleSerialInput()
 {
-    // 안전한 입력 처리를 위한 최대 반복 횟수 제한
-    const int MAX_CHARS_PER_CALL = 64;
-    int charCount = 0;
+    // 안전한 입력 처리를 위한 제한값들
+    const int MAX_CHARS_PER_CALL = 32;  // 더 보수적으로 설정
+    const int MAX_INPUT_LENGTH = 16;    // 입력 길이 제한
+    const unsigned long MAX_PROCESSING_TIME_MS = 10; // 최대 처리 시간 제한
     
-    while (Serial.available() && charCount < MAX_CHARS_PER_CALL)
+    unsigned long startTime = millis();
+    int charCount = 0;
+    int readAttempts = 0;
+    
+    while (charCount < MAX_CHARS_PER_CALL && 
+           (millis() - startTime) < MAX_PROCESSING_TIME_MS)
     {
-        int readResult = Serial.read();
-        if (readResult == -1) break; // 읽기 실패 시 종료
+        char c;
+        if (!safeMenuSerialRead(c, readAttempts)) {
+            break; // 안전한 읽기 실패 시 종료
+        }
         
-        char c = static_cast<char>(readResult);
         charCount++;
+        readAttempts = 0; // 성공적인 읽기 후 시도 횟수 리셋
         
         if (c == '\r' || c == '\n')
         {
@@ -88,12 +124,19 @@ void MenuController::handleSerialInput()
                 processInputBuffer();
             }
         }
-        else if (!isspace(c))
+        else if (isprint(c) && !isspace(c)) // 출력 가능한 비공백 문자만 허용
         {
-            // 버퍼 오버플로우 방지
-            if (inputBuffer.length() < 32)
+            // 더 엄격한 버퍼 오버플로우 방지
+            if (inputBuffer.length() < MAX_INPUT_LENGTH)
             {
                 inputBuffer += c;
+            }
+            else
+            {
+                // 입력 길이 초과 시 경고 및 버퍼 클리어
+                Serial.println("Warning: Input too long, cleared.");
+                inputBuffer = "";
+                break;
             }
         }
     }
@@ -566,15 +609,32 @@ void MenuController::processStateBasedInput()
 void MenuController::clearInputBuffer()
 {
     inputBuffer = "";
-    // 입력 처리 후 Serial 버퍼 완전 비우기 (테스트 자동화 환경 대응)
-    // 무한 루프 방지를 위한 최대 반복 횟수 제한
-    const int MAX_CLEAR_CHARS = 128;
-    int clearCount = 0;
     
-    while (Serial.available() && clearCount < MAX_CLEAR_CHARS)
+    // 안전한 버퍼 클리어를 위한 제한값들
+    const int MAX_CLEAR_CHARS = 64;  // 더 보수적으로 설정
+    const unsigned long MAX_CLEAR_TIME_MS = 5; // 최대 클리어 시간 제한
+    
+    unsigned long startTime = millis();
+    int clearCount = 0;
+    int consecutiveFailures = 0;
+    const int MAX_CONSECUTIVE_FAILURES = 3;
+    
+    // 입력 처리 후 Serial 버퍼 완전 비우기 (테스트 자동화 환경 대응)
+    while (clearCount < MAX_CLEAR_CHARS && 
+           (millis() - startTime) < MAX_CLEAR_TIME_MS &&
+           consecutiveFailures < MAX_CONSECUTIVE_FAILURES)
     {
+        if (!Serial.available()) {
+            break; // 더 이상 읽을 데이터 없음
+        }
+        
         int readResult = Serial.read();
-        if (readResult == -1) break; // 읽기 실패 시 종료
+        if (readResult == -1) {
+            consecutiveFailures++;
+            continue; // 읽기 실패 시 재시도
+        }
+        
+        consecutiveFailures = 0; // 성공적인 읽기 후 실패 카운터 리셋
         clearCount++;
     }
 }
